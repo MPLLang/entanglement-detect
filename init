@@ -6,3 +6,11 @@ ROOT=$(git rev-parse --show-toplevel)
 # echo "[INFO] submodules initialized"
 
 $ROOT/scripts/install_mpls
+
+if [[ ! -f $ROOT/inputs/words256.txt ]]; then
+  echo "[INFO] Generating missing input 'words256.txt'...";
+  ff=$ROOT/inputs/words64.txt;
+  cat $ff $ff $ff $ff > $ROOT/inputs/words256.txt;
+else
+  echo "[INFO] inputs okay"
+fi
