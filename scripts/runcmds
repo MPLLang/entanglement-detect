@@ -31,11 +31,11 @@ def _killer():
 
 def runcmds(rows, timeout=300.0, silent=False):
   global _currentChildren
-  numCmds = sum(row.get('trials', 1) for row in rows)
+  numCmds = sum(int(row.get('trials', '1')) for row in rows)
   cmdNum = 0
 
   for row in rows:
-    ntrials = row.get('trials', 1)
+    ntrials = int(row.get('trials', '1'))
     for _ in xrange(0, ntrials):
       row = row.copy()
       cmdNum += 1
