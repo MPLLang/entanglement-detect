@@ -135,7 +135,7 @@ fun frame (t: f32) (width: int) (height: int): Color.pixel array = let
         rgb 0.2 0.7 0.8
     end
   in
-    SeqBasis.tabulate 1000 (0, width*height)
+    SeqBasis.tabulate 10 (0, width*height)
       (fn k => f (k div width) (k mod width))
   end
 
