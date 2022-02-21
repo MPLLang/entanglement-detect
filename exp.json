@@ -1,0 +1,179 @@
+{
+  "templates":
+    [
+      {
+        "match": { "config": "mpl", "exp": "time" },
+        "template": "/usr/bin/time -v bin/<bench>.<config>.bin @mpl <procs?procs {}> set-affinity -- <args?{} ><args1?{}> -repeat 20 -warmup 5"
+      },
+      {
+        "match": { "config": "mpl", "exp": "space" },
+        "template": "/usr/bin/time -v bin/<bench>.<config>.bin @mpl <procs?procs {}> set-affinity -- <args?{} ><args1?{}> -repeat 20 -warmup 0"
+      },
+      {
+        "match": { "config": "mlton", "exp": "time" },
+        "template": "/usr/bin/time -v bin/<bench>.<config>.bin <args?{} ><args1?{}> -repeat 20 -warmup 5"
+      },
+      {
+        "match": { "config": "mlton", "exp": "space" },
+        "template": "/usr/bin/time -v bin/<bench>.<config>.bin <args?{} ><args1?{}> -repeat 20 -warmup 0"
+      }
+    ],
+
+  "globals":
+    {
+      "procs": [
+        "1", "10", "20", "30", "40", "50", "60", "72"
+      ],
+      "config": ["mlton", "mpl", "mpl-detect", "mpl-detect-no-suspects"],
+      "cwd": ["mpl"],
+      "exp": ["time", "space"],
+      "trials": ["1", "10"]
+    },
+
+  "jqselect":
+    "((.exp == \"space\" and .trials == \"10\") or (.exp == \"time\" and .trials == \"1\"))        and         ((.config == \"mlton\" and .procs == \"1\") or (.config == \"mpl\" and (.procs == \"1\" or .procs == \"72\")) or (.config == \"mpl-detect-no-suspects\" and (.procs == \"1\" or .procs == \"72\")) or (.config == \"mpl-detect\"))",
+
+  "specs":
+    [
+      {
+        "tag": ["primes"],
+        "bench": ["primes"],
+        "args": ["-N 100000000"]
+      },
+      {
+        "tag": ["dmm"],
+        "bench": ["dmm"],
+        "args": ["-N 1024"]
+      },
+      {
+        "tag": ["skyline"],
+        "bench": ["skyline"],
+        "args": ["-size 1000000"]
+      },
+      {
+        "tag": ["binarytrees5"],
+        "bench": ["ocaml-binarytrees5"],
+        "args": ["-max_depth 19"]
+      },
+      {
+        "tag": ["raytracer"],
+        "bench": ["ray"],
+        "args": ["-n 1000 -m 1000"]
+      },
+      {
+        "tag": ["tinykaboom"],
+        "bench": ["tinykaboom"],
+        "args": ["-frames 10 -fps 1"]
+      },
+      {
+        "tag": ["game-of-life"],
+        "bench": ["ocaml-game-of-life"],
+        "args": ["-n_times 100 -board_size 1024"]
+      },
+      {
+        "tag": ["nbody"],
+        "bench": ["ocaml-nbody-imm"],
+        "args": ["-n 500 -num_bodies 1024"]
+      },
+      {
+        "tag": ["lu-decomp"],
+        "bench": ["ocaml-lu-decomp"],
+        "args": ["-mat_size 1024"]
+      },
+      {
+        "tag": ["msort"],
+        "bench": ["msort"],
+        "args": ["-N 10000000"]
+      },
+      {
+        "tag": ["centrality"],
+        "bench": ["centrality"],
+        "args": ["../inputs/rmat-10M-symm-bin"]
+      },
+      {
+        "tag": ["nearest-nbrs"],
+        "bench": ["nn"],
+        "args": ["-N 1000000"]
+      },
+      {
+        "tag": ["quickhull"],
+        "bench": ["quickhull"],
+        "args": ["-N 10000000"]
+      },
+      {
+        "tag": ["reverb"],
+        "bench": ["reverb"],
+        "args": ["../inputs/mangore-waltz.wav"]
+      },
+      {
+        "tag": ["seam-carve"],
+        "bench": ["seam-carve"],
+        "args": ["../inputs/pano.ppm -num-seams 100"]
+      },
+      {
+        "tag": ["dedup"],
+        "bench": ["dedup"],
+        "args": ["../inputs/words64.txt --verbose --no-output"]
+      },
+      {
+        "tag": ["suffix-array"],
+        "bench": ["suffix-array"],
+        "args": ["--benchmark -N 10000000"]
+      },
+      {
+        "tag": ["grep"],
+        "bench": ["grep"],
+        "args": ["EE ../inputs/words64.txt --benchmark"]
+      },
+      {
+        "tag": ["bfs-tree"],
+        "bench": ["bfs-tree-entangled-fixed"],
+        "args": ["~/data/graph/adj/rmat-10M-symm-bin"]
+      },
+      {
+        "tag": ["bfs"],
+        "bench": ["bfs"],
+        "args": ["~/data/graph/adj/rmat-10M-symm-bin"]
+      },
+      {
+        "tag": ["centrality"],
+        "bench": ["centrality"],
+        "args": ["~/data/graph/adj/rmat-10M-symm-bin"]
+      },
+      {
+        "tag": ["palindrome"],
+        "bench": ["palindrome"],
+        "args": ["-N 1000000"]
+      },
+      {
+        "tag": ["tokens"],
+        "bench": ["tokens"],
+        "args": ["../inputs/words64.txt --verbose --no-output"]
+      },
+      {
+        "tag": ["nqueens"],
+        "bench": ["nqueens"],
+        "args": ["-N 13"]
+      },
+      {
+        "tag": ["ldd"],
+        "bench": ["ldd"],
+        "args": ["~/data/graph/adj/rmat-10M-symm-bin"]
+      },
+      {
+        "tag": ["triangle-count"],
+        "bench": ["triangle-count"],
+        "args": ["~/data/graph/adj/rmat-1M-symm-bin"]
+      },
+      {
+        "tag": ["range-query"],
+        "bench": ["range-tree"],
+        "args": ["-n 1000000 -q 1000000"]
+      },
+      {
+        "tag": ["interval-tree"],
+        "bench": ["interval-tree"],
+        "args": ["-n 1000000 -q 100"]
+      }
+    ]
+}
