@@ -43,7 +43,7 @@ def _makeCmd(template, assignment):
 
 def gencmds(templateSpecs, assignmentGroupSpecs):
   rows = []
-  seen = set()
+  # seen = set()
 
   for aSpec in assignmentGroupSpecs:
     x = [[(k, v) for v in vs] for k,vs in aSpec]
@@ -53,8 +53,7 @@ def gencmds(templateSpecs, assignmentGroupSpecs):
       for tSpec in templateSpecs:
         if _matches(tSpec['match'], assignment):
           row = _makeCmd(tSpec['template'], assignment)
-          if not (row['cmd'] in seen or seen.add(row['cmd'])):
-            rows.append(row)
+          rows.append(row)
           break
 
   return rows

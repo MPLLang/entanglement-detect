@@ -1,0 +1,1750 @@
+#!/usr/bin/python
+
+import json
+import sys
+import re
+import copy
+import os
+import argparse
+import subprocess
+import numpy as np
+
+def getGitRoot():
+  return subprocess.Popen(['git', 'rev-parse', '--show-toplevel'],
+    stdout=subprocess.PIPE).communicate()[0].rstrip()
+
+ROOT = getGitRoot()
+
+parser = argparse.ArgumentParser()
+parser.add_argument('--no-plots', action='store_true', dest='no_plots')
+parser.add_argument('input_file', nargs='?', metavar='RESULTS_FILE')
+args = parser.parse_args()
+
+BLUE = '\033[94m'
+#GREEN = '\033[92m'
+GREEN = '\033[38;2;20;139;20m'
+#LIGHT_GREEN = '\033[38;2;138;226;52m'
+LIGHT_GREEN = '\033[38;2;100;226;130m'
+YELLOW = '\033[93m'
+GRAY = '\033[38;2;151;155;147m'
+RED = '\033[91m'
+ENDC = '\033[0m'
+BOLD = '\033[1m'
+UNDERLINE = '\033[4m'
+
+class colortext:
+  def __init__(self, text, color, bold=True):
+    self.text = text
+    self.color = color
+    self.bold = bold
+  def __len__(self):
+    return len(self.text)
+  def __str__(self):
+    return (BOLD if self.bold else "") + self.color + self.text + ENDC
+def green(s):
+  return colortext(s, GREEN)
+def red(s):
+  return colortext(s, RED)
+def orange(s):
+  return colortext(s, YELLOW, bold=True)
+def blue(s):
+  return colortext(s, BLUE)
+def lightgreen(s):
+  return colortext(s, LIGHT_GREEN, bold=True)
+def gray(s):
+  return colortext(s, GRAY, bold=False)
+
+def displayTag(t):
+  return t
+
+def json_careful_loads(s):
+  try:
+    return json.loads(s)
+  except Exception as e:
+    sys.stderr.write("[ERR] Error while parsing json: {}\n".format(e))
+    sys.exit(1)
+
+def json_careful_readlines(f):
+  return [ json_careful_loads(line.rstrip('\n')) for line in f ]
+
+def safeInsert(dict, key, value):
+  if key not in dict:
+    dict[key] = value
+  else:
+    sys.stderr.write("[WARN] Key {} is already in use; trying _{} instead.\n".format(key))
+    safeInsert(dict, "_" + key, value)
+
+def reCompile(exp):
+  return re.compile(exp, re.MULTILINE)
+
+# def parseCommaInteger(s):
+#   return int(s.replace(",", ""))
+
+# local reclaimed: 32859049984
+# num local: 20999
+# local gc time: 4541
+# promo time: 8
+
+def parseKiB(kibStr):
+  return float(int(kibStr)) * 1024.0 / 1000.0
+
+def parseB(bytesStr):
+  return int(bytesStr) / 1000.0
+
+def parseTimes(stdout):
+  pat = reCompile(r"^time\s+(\d+.\d+).*$")
+  return [float(x) for x in pat.findall(stdout)]
+
+statsPatterns = \
+  [ #("time", float, reCompile(r"^end-to-end\s+(\d+.\d+)s$"))
+  #,
+    ("space", parseKiB, reCompile(r"^\s*Maximum resident set size \(kbytes\): (\d+).*$"))
+  # , ("num-local", int, reCompile(r"^num local: (\d+)$"))
+  # , ("local-reclaimed", parseB, reCompile(r"^local reclaimed: (\d+)$"))
+  # , ("local-time", int, reCompile(r"^local gc time: (\d+)$"))
+  # , ("promo-time", int, reCompile(r"^promo time: (\d+)$"))
+  # , ("root-reclaimed", parseB, reCompile(r"^root cc reclaimed: (\d+)$"))
+  # , ("internal-reclaimed", parseB, reCompile(r"^internal cc reclaimed: (\d+)$"))
+  # , ("num-root", int, reCompile(r"^num root cc: (\d+)$"))
+  # , ("num-internal", int, reCompile(r"^num internal cc: (\d+)$"))
+  # , ("root-time", int, reCompile(r"^root cc time: (\d+)$"))
+  # , ("internal-time", int, reCompile(r"^internal cc time: (\d+)$"))
+  # , ("working-set", parseCommaInteger, reCompile(r"^max bytes live: (.*) bytes$"))
+  ]
+
+def renameConfig(c):
+  return c
+
+def renameTag(t):
+  return t
+
+def displayTag(t):
+  sandmarkTags = ["binarytrees5","lu-decomp","game-of-life","nbody"]
+  if t in sandmarkTags:
+    return "SM:" + t
+  return t
+
+foundTags = set()
+foundProcs = set()
+
+def parseStats(row):
+  newRow = copy.deepcopy(row)
+  for (name, convert, pat) in statsPatterns:
+    m = pat.search(newRow['stdout'] + newRow['stderr'])
+    if m:
+      safeInsert(newRow, name, convert(m.group(1)))
+  newRow['procs'] = int(newRow.get('procs', '1'))
+  newRow['config'] = renameConfig(row['config'])
+  newRow['tag'] = renameTag(row['tag'])
+
+  allOutput = newRow['stdout'] + newRow['stderr']
+  if 'multi' in newRow:
+    for i in range(1, int(newRow['multi'])):
+      allOutput += newRow['stdout{}'.format(i)] + newRow['stderr{}'.format(i)]
+
+  tms = parseTimes(allOutput)
+  try:
+    newRow['avgtime'] = sum(tms) / len(tms)
+  except:
+    newRow['avgtime'] = None
+
+  foundTags.add(newRow['tag'])
+  foundProcs.add(newRow['procs'])
+
+  return newRow
+
+def findTrials(data, config, tag, procs):
+  result = []
+  for row in data:
+    if (row['config'] == config and \
+        row['tag'] == tag and \
+        row['procs'] == procs):
+      result.append(row)
+  return result
+
+# ======================================================================
+
+def averageTime(data, config, tag, procs, checkExpType=True):
+  trials = [ r for r in findTrials(data, config, tag, procs) if (not checkExpType) or (r['exp'] == 'time') ]
+  tms = [ r['avgtime'] for r in trials if 'avgtime' in r ]
+  try:
+    return tms[-1]
+  except:
+    return None
+
+def averageSpace(data, config, tag, procs):
+  trials = [ r for r in findTrials(data, config, tag, procs) if r['exp'] == 'space' ]
+  sp = [ r['space'] for r in trials if 'space' in r ]
+
+  try:
+    sp = sp[-10:]
+    return sum(sp) / len(sp)
+  except:
+    return None
+
+# ======================================================================
+
+def tm(t):
+  if t is None:
+    return None
+  if t == 0.0:
+    return int(0)
+  try:
+    if t < 1.0:
+      return round(t, 3)
+    if t < 10.0:
+      return round(t, 2)
+    elif t < 100.0:
+      return round(t, 1)
+    else:
+      return round(t)
+  except TypeError:
+    print ("[ERR] Got type error trying to round {}".format(repr(t)))
+    return None
+
+def ov(x):
+  if x is None:
+    return None
+  return "{:.2f}".format(x)
+
+def ovv(x):
+  if x is None:
+    return None
+  return round(x, 2)
+
+def rat(x):
+  if x is None:
+    return None
+  if x >= 10.0:
+    return str(int(round(x)))
+  if x >= 1:
+    return "{:.1f}".format(x)
+  else:
+    return "{:.2f}".format(x)
+
+def sd(x, y):
+  try:
+    return x / y
+  except:
+    return None
+
+def su(x):
+  if x is None:
+    return None
+  return str(int(round(x)))
+
+def bu(x):
+  if x is None:
+    return None
+  return "{:.1f}".format(x)
+
+def sp(kb):
+  if kb is None:
+    return None
+  num = kb
+  for unit in ['K','M','G']:
+    if num < 1000:
+      return "%3.1f %s" % (num, unit)
+    num = num / 1000
+  return "%3.1f %s" % (num, 'T')
+
+def noLeadZero(x):
+  try:
+    if "0" == x[:1]:
+      return x[1:]
+  except:
+    pass
+  return x
+
+def sfmt(xx):
+  if xx is None:
+    return "--"
+  elif type(xx) is str:
+    return xx
+  elif xx < 0.01:
+    return noLeadZero("{:.4f}".format(xx))
+  elif xx < 0.1:
+    return noLeadZero("{:.3f}".format(xx))
+  elif xx < 1.0:
+    return noLeadZero("{:.2f}".format(xx))
+  elif xx < 10.0:
+    return "{:.1f}".format(xx)
+  else:
+    return str(int(round(xx)))
+
+def spg(kb):
+  try:
+    gb = kb / (1000.0 * 1000.0)
+    if gb < .01:
+      return round(gb, 4)
+    elif gb < .1:
+      return round(gb, 3)
+    elif gb < 1.0:
+      return round(gb, 2)
+    elif gb < 10.0:
+      return round(gb, 1)
+    else:
+      return round(gb, 0)
+  except:
+    return None
+
+def makeBold(s):
+  try:
+    return "{\\bf " + s + "}"
+  except Exception as e:
+    sys.stderr.write("[WARN] " + str(e) + "\n")
+    return "--"
+
+def pcd(b, a):
+  try:
+    xx = int(round(100.0 * (b-a) / abs(a)))
+    return xx
+  except:
+    return None
+
+def latexpcd(b, a, highlight=True):
+  try:
+    xx = pcd(b, a)
+    result = ("+" if xx >= 0.0 else "") + ("{}\\%".format(xx))
+    if highlight and (xx < 0):
+      return makeBold(result)
+    else:
+      return result
+  except Exception as e:
+    sys.stderr.write("[WARN] " + str(e) + "\n")
+    return "--"
+
+def fmt(xx):
+  if xx is None:
+    return "--"
+  elif type(xx) is str:
+    return xx
+  elif xx < 1.0:
+    return noLeadZero("{:.3f}".format(xx))
+  elif xx < 10.0:
+    return "{:.2f}".format(xx)
+  elif xx < 100.0:
+    return "{:.1f}".format(xx)
+  else:
+    return str(int(round(xx)))
+
+def geomean(iterable):
+  try:
+    a = np.array(iterable)
+    return a.prod()**(1.0/len(a))
+  except:
+    return None
+
+# =========================================================================
+
+delimWidth = 2
+
+def makeline(row, widths, align):
+  bits = []
+  i = 0
+  while i < len(row):
+    j = i+1
+    while j < len(row) and (row[j] is None):
+      j += 1
+    availableWidth = sum(widths[i:j]) + delimWidth*(j-i-1)
+    s = str(row[i])
+    w = " " * (availableWidth - len(row[i]))
+    aa = align(i)
+    if aa == "l":
+      ln = s + w
+    elif aa == "r":
+      ln = w + s
+    elif aa == "c":
+      ln = w[:len(w)/2] + s + w[len(w)/2:]
+    else:
+      raise ValueError("invalid formatter: {}".format(aa))
+    bits.append(ln)
+    i = j
+  return (" " * delimWidth).join(bits)
+
+def table(rows, align=None):
+  numCols = max(len(row) for row in rows if not isinstance(row, str))
+
+  widths = [0] * numCols
+  for row in rows:
+    # string rows are used for formatting
+    if isinstance(row, str):
+      continue
+
+    i = 0
+    while i < len(row):
+      j = i+1
+      while j < len(row) and (row[j] is None):
+        j += 1
+      # rw = len(stripANSI(str(row[i])))
+      # rw = len(str(row[i]))
+      rw = len(row[i])
+      for k in xrange(i, j):
+        w = (rw / (j-i)) + (1 if k < rw % (j-i) else 0)
+        widths[k] = max(widths[k], w)
+      i = j
+
+  totalWidth = sum(widths) + delimWidth*(numCols-1)
+
+  def aa(i):
+    try:
+      return align(i)
+    except:
+      return "l"
+
+  output = []
+  for row in rows:
+    if row == "-" or row == "=":
+      output.append(row * totalWidth)
+      continue
+    elif isinstance(row, str):
+      raise ValueError("bad row: {}".format(row))
+    output.append(makeline(row, widths, aa))
+
+  return "\n".join(output)
+
+# =========================================================================
+
+def mostRecentResultsFile(suffix=""):
+  files = os.listdir(os.path.join(ROOT, "results"))
+  pattern = r'\d{6}-\d{6}'
+  if suffix != "":
+    pattern = pattern + "-" + suffix + "$"
+  else:
+    pattern = pattern + "$"
+  # A bit of a hack. Filenames are ...YYMMDD-hhmmss, so lexicographic string
+  # comparison is correct for finding the most recent (i.e. maximum) file
+  mostRecent = max(p for p in files if re.match(pattern, p))
+  return mostRecent
+
+if args.input_file:
+  timingsFile = args.input_file
+else:
+  print("[INFO] no results file argument; finding most recent")
+  try:
+    mostRecent = mostRecentResultsFile()
+  except:
+    print("[ERR] could not find most recent results file\n " + \
+          "  check that these are formatted as 'YYMMSS-hhmmss'")
+    sys.exit(1)
+  timingsFile = os.path.join(ROOT, 'results', mostRecent)
+
+print("[INFO] reading {}\n".format(timingsFile))
+with open(timingsFile, 'r') as data:
+  resultsData = json_careful_readlines(data)
+D = [ parseStats(row) for row in resultsData ]
+P = sorted(list(foundProcs))
+maxp = max(p for p in foundProcs)
+orderedTags = sorted(list(foundTags), key=displayTag)
+
+def keepTag(t):
+  return True
+  # return (t not in ["spanner", "interval-tree"])
+
+orderedTags = [ t for t in orderedTags if keepTag(t) ]
+
+# ===========================================================================
+
+def seqOverhead(tag):
+  try:
+    return averageTime(D, 'mpl-detect', tag, 1) / averageTime(D, 'mpl', tag, 1)
+  except Exception as e:
+    sys.stderr.write("[WARN] exception during seqOverhead({}): {}\n".format(tag, str(e)))
+    return None
+def parOverhead(tag):
+  try:
+    return averageTime(D, 'mpl-detect', tag, 72) / averageTime(D, 'mpl', tag, 72)
+  except Exception as e:
+    sys.stderr.write("[WARN] exception during parOverhead({}): {}\n".format(tag, str(e)))
+    return None
+def seqSpaceOverhead(tag):
+  try:
+    return averageSpace(D, 'mpl-detect', tag, 1) / averageSpace(D, 'mpl', tag, 1)
+  except Exception as e:
+    sys.stderr.write("[WARN] exception during seqSpaceOverhead({}): {}\n".format(tag, str(e)))
+    return None
+def parSpaceOverhead(tag):
+  try:
+    return averageSpace(D, 'mpl-detect', tag, 72) / averageSpace(D, 'mpl', tag, 72)
+  except Exception as e:
+    sys.stderr.write("[WARN] exception during parSpaceOverhead({}): {}\n".format(tag, str(e)))
+    return None
+
+print "geomean 1-core time overhead", geomean([seqOverhead(t) for t in orderedTags])
+print "geomean 72-core time overhead", geomean([parOverhead(t) for t in orderedTags])
+# print "geomean 1-core space overhead", geomean([seqSpaceOverhead(t) for t in orderedTags])
+# print "geomean 72-core space overhead", geomean([parSpaceOverhead(t) for t in orderedTags])
+
+# ===========================================================================
+
+# percent difference (b-a)/|a|
+def color_pcd(b, a):
+  try:
+    xx = 100.0 * (b-a) / abs(a)
+    result = ("+" if xx >= 0.0 else "") + ("{:.1f}%".format(xx))
+    if xx >= 10.0:
+      return red(result)
+    elif xx >= 5.0:
+      return orange(result)
+    elif xx <= -10.0:
+      return green(result)
+    elif xx <= -5.0:
+      return lightgreen(result)
+    else:
+      return gray(result)
+  except:
+    return None
+
+def sp(kb):
+  if kb is None:
+    return None
+  num = kb
+  for unit in ['K','M','G']:
+    if num < 1000:
+      return "%3.1f %s" % (num, unit)
+    num = num / 1000
+  return "%3.1f %s" % (num, 'T')
+
+def defaultAlign(i):
+  return "r" if i == 0 else "l"
+
+
+headers1 = ['', '   P=1', None, '   P={}'.format(maxp), None]
+headers2 = ['Benchmark', 'MPL', 'D', 'MPL', 'D']
+tt = [headers1, "-", headers2, "="]
+for tag in orderedTags:
+  thisRow = [displayTag(tag),
+             tm(averageTime(D, 'mpl', tag, 1)),
+             tm(averageTime(D, 'mpl-detect', tag, 1)),
+             tm(averageTime(D, 'mpl', tag, maxp)),
+             tm(averageTime(D, 'mpl-detect', tag, maxp)),
+            ]
+  thisRow = [thisRow[0]] + [str(x) if x is not None else "--" for x in thisRow[1:]]
+  tt.append(thisRow)
+
+print("TIMINGS")
+print(table(tt, defaultAlign))
+print("")
+
+
+headers1 = ['', '   P=1', None, '   P={}'.format(maxp), None]
+headers2 = ['Benchmark', 'MPL', 'D', 'MPL', 'D']
+tt = [headers1, "-", headers2, "="]
+for tag in orderedTags:
+  thisRow = [displayTag(tag),
+             sp(averageSpace(D, 'mpl', tag, 1)),
+             sp(averageSpace(D, 'mpl-detect', tag, 1)),
+             sp(averageSpace(D, 'mpl', tag, maxp)),
+             sp(averageSpace(D, 'mpl-detect', tag, maxp))
+            ]
+  thisRow = [thisRow[0]] + [str(x) if x is not None else "--" for x in thisRow[1:]]
+  tt.append(thisRow)
+
+print("MAX RESIDENCY")
+print(table(tt, defaultAlign))
+print("")
+
+
+headers1 = ['', '  TIME', None, '  SPACE', None]
+headers2 = ['Benchmark', ' P=1', ' P={}'.format(maxp), ' P=1', ' P={}'.format(maxp)]
+tt = [headers1, "-", headers2, "="]
+for tag in orderedTags:
+  tMPL1 = tm(averageTime(D, 'mpl', tag, 1))
+  tMPLp = tm(averageTime(D, 'mpl', tag, maxp))
+  tMPLcc1 = tm(averageTime(D, 'mpl-detect', tag, 1))
+  tMPLccp = tm(averageTime(D, 'mpl-detect', tag, maxp))
+  rMPL1 = averageSpace(D, 'mpl', tag, 1)
+  rMPLp = averageSpace(D, 'mpl', tag, maxp)
+  rMPLcc1 = averageSpace(D, 'mpl-detect', tag, 1)
+  rMPLccp = averageSpace(D, 'mpl-detect', tag, maxp)
+
+  t1 = color_pcd(tMPLcc1, tMPL1)
+  tp = color_pcd(tMPLccp, tMPLp)
+  r1 = color_pcd(rMPLcc1, rMPL1)
+  rp = color_pcd(rMPLccp, rMPLp)
+
+  row = [displayTag(tag), t1, tp, r1, rp]
+  row = [x if x is not None else "--" for x in row]
+  tt.append(row)
+
+print("MPL-DETECT versus MPL")
+print(table(tt, defaultAlign))
+print("")
+
+
+
+headers1 = ['', '  TIME', None, '  SPACE', None]
+headers2 = ['Benchmark', ' P=1', ' P={}'.format(maxp), ' P=1', ' P={}'.format(maxp)]
+tt = [headers1, "-", headers2, "="]
+for tag in orderedTags:
+  tMPL1 = tm(averageTime(D, 'mpl-detect-no-suspects', tag, 1))
+  tMPLp = tm(averageTime(D, 'mpl-detect-no-suspects', tag, maxp))
+  tMPLcc1 = tm(averageTime(D, 'mpl-detect', tag, 1))
+  tMPLccp = tm(averageTime(D, 'mpl-detect', tag, maxp))
+  rMPL1 = averageSpace(D, 'mpl-detect-no-suspects', tag, 1)
+  rMPLp = averageSpace(D, 'mpl-detect-no-suspects', tag, maxp)
+  rMPLcc1 = averageSpace(D, 'mpl-detect', tag, 1)
+  rMPLccp = averageSpace(D, 'mpl-detect', tag, maxp)
+
+  t1 = color_pcd(tMPLcc1, tMPL1)
+  tp = color_pcd(tMPLccp, tMPLp)
+  r1 = color_pcd(rMPLcc1, rMPL1)
+  rp = color_pcd(rMPLccp, rMPLp)
+
+  row = [displayTag(tag), t1, tp, r1, rp]
+  row = [x if x is not None else "--" for x in row]
+  tt.append(row)
+
+print("MPL-DETECT versus MPL-DETECT-NO-SUSPECTS")
+print(table(tt, defaultAlign))
+print("")
+
+exit(0)
+
+# ===========================================================================
+# ===========================================================================
+# ===========================================================================
+# ===========================================================================
+# ===========================================================================
+# ===========================================================================
+# ===========================================================================
+# ===========================================================================
+# ===========================================================================
+# ===========================================================================
+# ===========================================================================
+# ===========================================================================
+# ===========================================================================
+# ===========================================================================
+# ===========================================================================
+# ===========================================================================
+# ===========================================================================
+# ===========================================================================
+# ===========================================================================
+# ===========================================================================
+# ===========================================================================
+# ===========================================================================
+# ===========================================================================
+# ===========================================================================
+# ===========================================================================
+# ===========================================================================
+
+mplComparisonTable = "figures/mpl-space-time-comparison.tex"
+with open(mplComparisonTable, 'w') as output:
+  for tag in orderedTags:
+    # mlton = spg(averageSpace(DS, 'mlton', tag, 1))
+    R_mpl1 = spg(averageSpace(D, 'mpl-hoard', tag, 1))
+    R_mplp = spg(averageSpace(D, 'mpl-hoard', tag, maxp))
+    R_mplcc1 = spg(averageSpace(D, 'mpl-u', tag, 1))
+    R_mplccp = spg(averageSpace(D, 'mpl-u', tag, maxp))
+
+    T_mpl1 = tm(averageTime(D, 'mpl-hoard', tag, 1))
+    T_mplp = tm(averageTime(D, 'mpl-hoard', tag, maxp))
+    T_mplcc1 = tm(averageTime(D, 'mpl-u', tag, 1))
+    T_mplccp = tm(averageTime(D, 'mpl-u', tag, maxp))
+
+    row = \
+      [ fmt(T_mpl1)
+      , fmt(T_mplcc1) + " (" + latexpcd(T_mplcc1, T_mpl1, highlight=True) + ")"
+      , fmt(T_mplp)
+      , fmt(T_mplccp) + " (" + latexpcd(T_mplccp, T_mplp, highlight=True) + ")"
+      , sfmt(R_mpl1)
+      , sfmt(R_mplcc1) + " (" + latexpcd(R_mplcc1, R_mpl1, highlight=True) + ")"
+      , sfmt(R_mplp)
+      , sfmt(R_mplccp) + " (" + latexpcd(R_mplccp, R_mplp, highlight=True) + ")"
+      ]
+
+    output.write(" & ".join([displayTag(tag)] + row))
+    output.write("  \\\\\n")
+print("[INFO] wrote to {}".format(mplComparisonTable))
+
+# ===========================================================================
+
+proc1TimeRats = []
+proc72TimeRats = []
+proc1SpaceRats = []
+proc72SpaceRats = []
+multiTimeRats = []
+
+ocamlComparisonTable = "figures/ocaml-space-time-comparison.tex"
+with open(ocamlComparisonTable, 'w') as output:
+  for tag in ocamlTags:
+    # mlton = spg(averageSpace(DS, 'mlton', tag, 1))
+    R_ocaml1 = spg(averageSpace(D, 'ocaml', tag, 1))
+    R_ocamlp = spg(averageSpace(D, 'ocaml', tag, maxp))
+    R_mplcc1 = spg(averageSpace(D, 'mpl-u', tag, 1))
+    R_mplccp = spg(averageSpace(D, 'mpl-u', tag, maxp))
+
+    T_ocaml1 = tm(averageTime(D, 'ocaml', tag, 1))
+    T_ocamlp = tm(averageTime(D, 'ocaml', tag, maxp))
+    T_mplcc1 = tm(averageTime(D, 'mpl-u', tag, 1))
+    T_mplccp = tm(averageTime(D, 'mpl-u', tag, maxp))
+
+
+    # Mmplu36 = tm(averageTime(MD, 'mpl-u', tag, 36, checkExpType=False))
+    # Mmplu72 = tm(averageTime(MD, 'mpl-u', tag, 72, checkExpType=False))
+    Mmplu110 = tm(averageTime(MD, 'mpl-u', tag, 110, checkExpType=False))
+
+
+    # Mocaml36 = tm(averageTime(MD, 'mpl-u', tag, 36, checkExpType=False))
+    # Mocaml72 = tm(averageTime(MD, 'mpl-u', tag, 72, checkExpType=False))
+    Mocaml110 = tm(averageTime(MD, 'ocaml', tag, 110, checkExpType=False))
+
+
+    proc1TimeRats.append(ovv(sd(T_mplcc1, T_ocaml1)))
+    proc72TimeRats.append(ovv(sd(T_mplccp, T_ocamlp)))
+    proc1SpaceRats.append(ovv(sd(R_mplcc1, R_ocaml1)))
+    proc72SpaceRats.append(ovv(sd(R_mplccp, R_ocamlp)))
+    multiTimeRats.append(ovv(sd(Mmplu110, Mocaml110)))
+
+    row = \
+      [ fmt(T_ocaml1)
+      , fmt(T_mplcc1)
+      , makeBold(fmt(ov(sd(T_mplcc1, T_ocaml1))))
+      , fmt(T_ocamlp)
+      , fmt(T_mplccp)
+      , makeBold(fmt(ov(sd(T_mplccp, T_ocamlp))))
+      , fmt(Mocaml110)
+      , fmt(Mmplu110)
+      , makeBold(fmt(ov(sd(Mmplu110, Mocaml110))))
+      , sfmt(R_ocaml1)
+      , sfmt(R_mplcc1)
+      , makeBold(fmt(ov(sd(R_mplcc1, R_ocaml1))))
+      , sfmt(R_ocamlp)
+      , sfmt(R_mplccp)
+      , makeBold(fmt(ov(sd(R_mplccp, R_ocamlp))))
+      ]
+
+    output.write(" & ".join([displayTag(tag)] + row))
+    output.write("  \\\\\n")
+
+  output.write("\\midrule\n")
+  row = [
+    "", "", makeBold(fmt(ov(geomean(proc1TimeRats)))),
+    "", "", makeBold(fmt(ov(geomean(proc72TimeRats)))),
+    "", "", makeBold(fmt(ov(geomean(multiTimeRats)))),
+    "", "", makeBold(fmt(ov(geomean(proc1SpaceRats)))),
+    "", "", makeBold(fmt(ov(geomean(proc72SpaceRats))))
+  ]
+  output.write(" & ".join(["geomean"] + row))
+  output.write("  \\\\\n")
+print("[INFO] wrote to {}".format(ocamlComparisonTable))
+
+# ocamlComparisonGeomeans = "figures/ocaml-space-time-comparison-geomeans.tex"
+# with open(ocamlComparisonGeomeans, 'w') as output:
+
+
+#   output.write(" & ".join(["geomean"] + row))
+#   output.write("  \\\\\n")
+# print("[INFO] wrote to {}".format(ocamlComparisonGeomeans))
+
+# ===========================================================================
+
+selfCompeteTable = "figures/ocaml-mpl-self-compete.tex"
+with open(selfCompeteTable, 'w') as output:
+  for tag in competeTags:
+    mpl1 = tm(averageTime(D, 'mpl-u', tag, 1))
+    mpl40 = tm(averageTime(D, 'mpl-u', tag, 40))
+    mpl72 = tm(averageTime(D, 'mpl-u', tag, 72))
+    mplCompete = tm(competeResults[tuple(('mpl-u', tag))])
+
+    ocaml1 = tm(averageTime(D, 'ocaml', tag, 1))
+    ocaml40 = tm(averageTime(D, 'ocaml', tag, 40))
+    ocaml72 = tm(averageTime(D, 'ocaml', tag, 72))
+    ocamlCompete = tm(competeResults[tuple(('ocaml', tag))])
+
+    row = [
+      ocaml1,
+      mpl1,
+      ocaml40,
+      mpl40,
+      ocaml72,
+      mpl72,
+      ocamlCompete,
+      mplCompete,
+      makeBold(fmt(bu(sd(ocamlCompete,mplCompete))) + "$\\times$")
+    ]
+
+    row = [displayTag(tag)] + [fmt(x) for x in row]
+
+    output.write(" & ".join(row))
+    output.write("  \\\\\n")
+print("[INFO] wrote to {}".format(selfCompeteTable))
+
+#############################################################################
+
+mltonCmpTable = "figures/mlton-comparison.tex"
+with open(mltonCmpTable, 'w') as output:
+  for tag in orderedTags:
+    mlton = tm(averageTime(D, 'mlton', tag, 1))
+    mpl1 = tm(averageTime(D, 'mpl-hoard', tag, 1))
+    mpl72 = tm(averageTime(D, 'mpl-hoard', tag, 72))
+    mplu1 = tm(averageTime(D, 'mpl-u', tag, 1))
+    mplu72 = tm(averageTime (D, 'mpl-u', tag, 72))
+
+    Rmlton = spg(averageSpace(D, 'mlton', tag, 1))
+    Rmpl1 = spg(averageSpace(D, 'mpl-hoard', tag, 1))
+    Rmpl72 = spg(averageSpace(D, 'mpl-hoard', tag, 72))
+    Rmplu1 = spg(averageSpace(D, 'mpl-u', tag, 1))
+    Rmplu72 = spg(averageSpace (D, 'mpl-u', tag, 72))
+
+    row = [
+      mlton,
+      ov(sd(mpl1, mlton)),
+      ov(sd(mplu1, mlton)),
+      su(sd(mlton, mpl72)),
+      su(sd(mlton, mplu72)),
+      Rmlton,
+      bu(sd(Rmpl1, Rmlton)),
+      bu(sd(Rmplu1, Rmlton)),
+      bu(sd(Rmpl72, Rmlton)),
+      bu(sd(Rmplu72, Rmlton))
+    ]
+
+    row = [ fmt(x) for x in row ]
+    output.write(" & ".join([displayTag(tag)] + row))
+    output.write("  \\\\\n")
+print("[INFO] wrote to {}".format(mltonCmpTable))
+
+#############################################################################
+
+mltonCmpTable = "figures/simple-mlton-comparison.tex"
+with open(mltonCmpTable, 'w') as output:
+  for tag in orderedTags:
+    mlton = tm(averageTime(D, 'mlton', tag, 1))
+    # mpl1 = tm(averageTime(D, 'mpl-hoard', tag, 1))
+    # mpl72 = tm(averageTime(D, 'mpl-hoard', tag, 72))
+    mplu1 = tm(averageTime(D, 'mpl-u', tag, 1))
+    mplu72 = tm(averageTime (D, 'mpl-u', tag, 72))
+
+    Rmlton = spg(averageSpace(D, 'mlton', tag, 1))
+    # Rmpl1 = spg(averageSpace(D, 'mpl-hoard', tag, 1))
+    # Rmpl72 = spg(averageSpace(D, 'mpl-hoard', tag, 72))
+    Rmplu1 = spg(averageSpace(D, 'mpl-u', tag, 1))
+    Rmplu72 = spg(averageSpace (D, 'mpl-u', tag, 72))
+
+    row = [
+      mlton,
+      mplu1,
+      ov(sd(mplu1, mlton)),
+      mplu72,
+      su(sd(mlton, mplu72)),
+      sfmt(Rmlton),
+      sfmt(Rmplu1),
+      bu(sd(Rmplu1, Rmlton)),
+      sfmt(Rmplu72),
+      bu(sd(Rmplu72, Rmlton))
+    ]
+
+    row = [ fmt(x) for x in row ]
+    output.write(" & ".join([displayTag(tag)] + row))
+    output.write("  \\\\\n")
+print("[INFO] wrote to {}".format(mltonCmpTable))
+
+
+#############################################################################
+
+mltonCmpTable = "figures/bigger-mlton-comparison.tex"
+with open(mltonCmpTable, 'w') as output:
+  for tag in orderedTags:
+    mlton = tm(averageTime(D, 'mlton', tag, 1))
+    # mpl1 = tm(averageTime(D, 'mpl-hoard', tag, 1))
+    # mpl72 = tm(averageTime(D, 'mpl-hoard', tag, 72))
+    mplu1 = tm(averageTime(D, 'mpl-u', tag, 1))
+    mplu72 = tm(averageTime (D, 'mpl-u', tag, 72))
+
+
+    Mmlton = tm(2.0 * averageTime(D, 'mlton', tag, 1))
+    Mmplu36 = tm(averageTime(MD, 'mpl-u', tag, 36, checkExpType=False))
+    Mmplu72 = tm(averageTime(MD, 'mpl-u', tag, 72, checkExpType=False))
+    Mmplu110 = tm(averageTime(MD, 'mpl-u', tag, 110, checkExpType=False))
+
+
+    mplu72NGC = tm(averageTime(NGCD, 'mpl-u', tag, 72))
+
+
+    Rmlton = spg(averageSpace(D, 'mlton', tag, 1))
+    # Rmpl1 = spg(averageSpace(D, 'mpl-hoard', tag, 1))
+    # Rmpl72 = spg(averageSpace(D, 'mpl-hoard', tag, 72))
+    Rmplu1 = spg(averageSpace(D, 'mpl-u', tag, 1))
+    Rmplu72 = spg(averageSpace (D, 'mpl-u', tag, 72))
+
+    row = [
+      mlton,
+      mplu1,
+      mplu72,
+
+      ov(sd(mplu1, mlton)),
+
+      su(sd(mlton, mplu72)),
+
+      su(sd(mlton, mplu72NGC)),
+
+      su(sd(Mmlton, Mmplu36)),
+      su(sd(Mmlton, Mmplu72)),
+      su(sd(Mmlton, Mmplu110)),
+
+      "",
+
+      sfmt(Rmlton),
+      sfmt(Rmplu1),
+      sfmt(Rmplu72),
+      bu(sd(Rmplu1, Rmlton)),
+      bu(sd(Rmplu72, Rmlton))
+    ]
+
+    row = [ fmt(x) for x in row ]
+    output.write(" & ".join([displayTag(tag)] + row))
+    output.write("  \\\\\n")
+print("[INFO] wrote to {}".format(mltonCmpTable))
+
+
+#############################################################################
+
+mltonCmpTable = "figures/norm-multi-speedups-table.tex"
+with open(mltonCmpTable, 'w') as output:
+  for tag in multiTags:
+    mlton = tm(2.0 * averageTime(D, 'mlton', tag, 1))
+    mplu36 = tm(averageTime(MD, 'mpl-u', tag, 36, checkExpType=False))
+    mplu72 = tm(averageTime(MD, 'mpl-u', tag, 72, checkExpType=False))
+    mplu120 = tm(averageTime(MD, 'mpl-u', tag, 120, checkExpType=False))
+
+    row = [
+      su(sd(mlton, mplu36)),
+      su(sd(mlton, mplu72)),
+      su(sd(mlton, mplu120))
+    ]
+
+    row = [ fmt(x) for x in row ]
+    output.write(" & ".join([displayTag(tag)] + row))
+    output.write("  \\\\\n")
+print("[INFO] wrote to {}".format(mltonCmpTable))
+
+
+#############################################################################
+
+withWithoutGCTable = "figures/with-without-gc.tex"
+with open(withWithoutGCTable, 'w') as output:
+  for tag in nogcTags:
+    mlton = tm(averageTime(D, 'mlton', tag, 1))
+    # mltonNGC = tm(averageTime(NGCD, 'mlton', tag, 1))
+
+    mplu72 = tm(averageTime(D, 'mpl-u', tag, 72))
+    mplu72NGC = tm(averageTime(NGCD, 'mpl-u', tag, 72))
+
+    row = [
+      su(sd(mlton, mplu72)),
+      fmt(su(sd(mlton, mplu72NGC))) # + ("" if tag != "skyline" else "*")
+    ]
+
+    row = [ fmt(x) for x in row ]
+    output.write(" & ".join([displayTag(tag)] + row))
+    output.write("  \\\\\n")
+print("[INFO] wrote to {}".format(withWithoutGCTable))
+
+# ===========================================================================
+
+if args.no_plots:
+  print("[INFO] done reporting {}".format(timingsFile))
+  sys.exit(0)
+
+# ===========================================================================
+
+speedupTags = [ t for t in orderedTags ]
+
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
+
+plt.figure(figsize=(7,7))
+# markers = ['o','v','^','<','>','s','*','d','D','+','x','|','','','','','']
+colors = ['blue', 'green', 'red', 'darkturquoise', 'black', 'darkviolet', 'goldenrod', 'dimgrey']
+markers = ['o','v','^','<','>','s','d','D','*','+','x']
+linestyles = ['solid', 'dashed', 'dashdot', 'dotted']
+
+# markers = ['.'] * len(speedupTags)
+procs = [1,10,20,30,40,50,60,72]
+
+fontSize = 22
+legendFontSize = 14
+markerSize = 10
+
+plt.plot([0,74], [0,74], marker="", color="grey", linewidth=1)
+lines = []
+for (i, tag) in enumerate(speedupTags):
+  try:
+    baseline = averageTime(D, 'mlton', tag, 1)
+    def su(p):
+      try:
+        return baseline / averageTime(D, 'mpl-u', tag, p)
+      except Exception as e:
+        sys.stderr.write('[WARN] error while plotting speedup for {} at P={}: {}\n'.format(tag, p, e))
+        return None
+    speedups = map(su, procs)
+    color = colors[i % len(colors)]
+    marker = markers[i % len(markers)]
+    linestyle = linestyles[i / len(markers)]
+    lines.append(plt.plot(procs, speedups, linestyle=linestyle, marker=marker, markersize=markerSize, linewidth=1.2, color=color))
+  except Exception as e:
+    sys.stderr.write('[WARN] error while plotting speedup for {}: {}\n'.format(tag, e))
+
+# this sets the legend.
+font = {
+  'size': legendFontSize,
+  #'family' : 'normal',
+  #'weight' : 'bold',
+}
+matplotlib.rc('font', **font)
+
+# make sure to use truetype fonts
+matplotlib.rcParams['pdf.fonttype'] = 42
+matplotlib.rcParams['ps.fonttype'] = 42
+
+# set legend position
+matplotlib.rcParams['legend.loc'] = 'upper left'
+
+ticks = [1] + range(10, 72, 10)
+
+plt.xlabel('Processors', fontsize=fontSize)
+plt.ylabel('Speedup', fontsize=fontSize)
+plt.yticks(ticks, fontsize=fontSize)
+plt.xticks(ticks, fontsize=fontSize)
+plt.xlim(0, 74)
+plt.ylim(0, 74)
+plt.gca().grid(axis='both', linestyle='dotted')
+plt.gca().set_axisbelow(True)
+# plt.margins(y=10)
+
+if False:
+  plt.legend(
+    [b[0] for b in lines],
+    map(displayTag, speedupTags),
+    bbox_to_anchor=(-0.16,1.05),
+    loc='upper right',
+    ncol=1
+  )
+
+outputName = 'figures/mpl-u-speedups.pdf'
+plt.savefig(outputName, bbox_inches='tight')
+sys.stdout.write("[INFO] output written to {}\n".format(outputName))
+plt.close()
+
+##############################################################################
+# AWARE OVERCOMMIT SPEEDUPS
+
+procs = [1,10,20,30,40,50,60,72,80,90,100,110,120,130,144,150,160,170,180,190,200,210,216]
+
+fontSize = 16
+legendFontSize = 14
+markerSize = 7
+
+def awareOvercommitPlot(config):
+  max_x = 218
+  max_y = 100
+  widthRatio = float(max_x) / float(max_y)
+  plt.figure(figsize=(7 * widthRatio, 7))
+  # fig, ax = plt.subplots()
+  plt.plot(procs, procs, marker="", color="grey", linewidth=1.5)
+  plt.plot([72,72], [0,max_y], marker="", color="black", linewidth=1.5, linestyle="dashed")
+  plt.plot([144,144], [0,max_y], marker="", color="black", linewidth=1.5, linestyle="dashed")
+  lines = []
+  for (i, tag) in enumerate(orderedTags):
+    try:
+      baseline = averageTime(D, 'mlton', tag, 1)
+      def su(p):
+        try:
+          return baseline / averageTime(D, config, tag, p)
+        except Exception as e:
+          sys.stderr.write('[WARN] error while plotting aware overcommit speedup for {} at P={}: {}\n'.format(tag, p, e))
+          return None
+      speedups = map(su, procs)
+      color = colors[i % len(colors)]
+      marker = markers[i % len(markers)]
+      linestyle = linestyles[i / len(markers)]
+      lines.append(plt.plot(procs, speedups, linestyle=linestyle, marker=marker, markersize=markerSize, linewidth=1, color=color))
+    except Exception as e:
+      sys.stderr.write('[WARN] error while plotting aware overcommit speedup for {}: {}\n'.format(tag, e))
+
+  # this sets the legend.
+  font = {
+    'size': legendFontSize,
+    #'family' : 'normal',
+    #'weight' : 'bold',
+  }
+  matplotlib.rc('font', **font)
+
+  # make sure to use truetype fonts
+  matplotlib.rcParams['pdf.fonttype'] = 42
+  matplotlib.rcParams['ps.fonttype'] = 42
+
+  # set legend position
+  matplotlib.rcParams['legend.loc'] = 'upper left'
+
+  yticks = [1] + range(10,max_y,10)
+  xticks = [1] + range(10,max_x,10)
+  # xlabels = ["1", "4", "8", "", "8h", "8h+4", "8h+8"]
+
+  annotationsBelow = False
+
+  plt.xlabel('Number of threads', fontsize=fontSize)
+  if annotationsBelow:
+    plt.gca().xaxis.set_label_coords(0.5, -0.125)
+  plt.ylabel('Speedup', fontsize=fontSize)
+  plt.yticks(yticks, fontsize=fontSize)
+  plt.xticks(xticks, fontsize=fontSize)
+  plt.xlim(0, max_x)
+  plt.ylim(0, max_y)
+  plt.gca().grid(axis='both', linestyle='dotted')
+  plt.gca().set_axisbelow(True)
+  # plt.margins(y=10)
+
+  plt.legend(
+    [b[0] for b in lines],
+    map(displayTag, orderedTags),
+    bbox_to_anchor=(1,1),
+    ncol=2
+  )
+
+  ##############
+  # Lines below
+
+  if annotationsBelow:
+    plt.annotate('', xy=(0, -10),xytext=(72,-10),
+                 arrowprops=dict(arrowstyle='<->',facecolor='red'),
+                 annotation_clip=False)
+    plt.annotate('dedicated',xy=(36,-8),
+                 ha='center', va='center', fontsize=14,
+                 annotation_clip=False)
+
+    plt.annotate('', xy=(72, -10),xytext=(144,-10),
+                 arrowprops=dict(arrowstyle='<->',facecolor='red'),
+                 annotation_clip=False)
+    plt.annotate('hyperthreaded',xy=(108,-8),
+                 ha='center', va='center', fontsize=14,
+                 annotation_clip=False)
+
+    plt.annotate('', xy=(144, -10),xytext=(216,-10),
+                 arrowprops=dict(arrowstyle='<->',facecolor='red'),
+                 annotation_clip=False)
+    plt.annotate('overcommitted',xy=(180,-8),
+                 ha='center', va='center', fontsize=14,
+                 annotation_clip=False)
+  else:
+    plt.annotate('', xy=(0, 93),xytext=(72,93),
+                 arrowprops=dict(arrowstyle='<->',facecolor='red'),
+                 annotation_clip=False)
+    plt.annotate('dedicated',xy=(36,93),
+                 ha='center', va='bottom', fontsize=14,
+                 annotation_clip=False)
+
+    plt.annotate('', xy=(72, 93),xytext=(144,93),
+                 arrowprops=dict(arrowstyle='<->',facecolor='red'),
+                 annotation_clip=False)
+    plt.annotate('hyperthreaded',xy=(116,93),
+                 ha='center', va='bottom', fontsize=14,
+                 annotation_clip=False)
+
+    plt.annotate('', xy=(144, 93),xytext=(216,93),
+                 arrowprops=dict(arrowstyle='<->',facecolor='red'),
+                 annotation_clip=False)
+    plt.annotate('overcommitted',xy=(180,93),
+                 ha='center', va='bottom', fontsize=14,
+                 annotation_clip=False)
+
+  outputName = 'figures/{}-aware-overcommit-speedups.pdf'.format(config)
+  plt.savefig(outputName, bbox_inches='tight')
+  sys.stdout.write("[INFO] output written to {}\n".format(outputName))
+  plt.close()
+
+awareOvercommitPlot('mpl-u')
+
+##############################################################################
+# OVERCOMMIT SPEEDUPS
+
+procs = [1,2,4,6,8,12,16,17,18,19,20,22,24]
+
+fontSize = 18
+legendFontSize = 12
+markerSize = 8
+
+def overcommitPlot(config):
+  plt.figure(figsize=(7,7))
+  plt.plot(procs, procs, marker="", color="grey", linewidth=1.5)
+  plt.plot([8,8], [0,24], marker="", color="black", linewidth=1.5, linestyle="dashed")
+  plt.plot([16,16], [0,24], marker="", color="black", linewidth=1.5, linestyle="dashed")
+  lines = []
+  for (i, tag) in enumerate(overcommitTags):
+    try:
+      baseline = averageTime(OD, config, tag, 1, checkExpType=False)
+      def su(p):
+        try:
+          return baseline / averageTime(OD, config, tag, p, checkExpType=False)
+        except Exception as e:
+          sys.stderr.write('[WARN] error while plotting overcommit speedup for {} at P={}: {}\n'.format(tag, p, e))
+          return None
+      speedups = map(su, procs)
+      color = colors[i % len(colors)]
+      marker = markers[i % len(markers)]
+      linestyle = linestyles[i / len(markers)]
+      lines.append(plt.plot(procs, speedups, linestyle=linestyle, marker=marker, markersize=markerSize, linewidth=1, color=color))
+    except Exception as e:
+      sys.stderr.write('[WARN] error while plotting overcommit speedup for {}: {}\n'.format(tag, e))
+
+  # this sets the legend.
+  font = {
+    'size': legendFontSize,
+    #'family' : 'normal',
+    #'weight' : 'bold',
+  }
+  matplotlib.rc('font', **font)
+
+  # make sure to use truetype fonts
+  matplotlib.rcParams['pdf.fonttype'] = 42
+  matplotlib.rcParams['ps.fonttype'] = 42
+
+  # set legend position
+  matplotlib.rcParams['legend.loc'] = 'upper left'
+
+  ticks = [1, 4, 8, 12, 16, 20, 24]
+  # xlabels = ["1", "4", "8", "", "8h", "8h+4", "8h+8"]
+
+  plt.xlabel('Threads', fontsize=fontSize)
+  plt.ylabel('Speedup', fontsize=fontSize)
+  plt.yticks(ticks, fontsize=fontSize)
+  plt.xticks(ticks, fontsize=fontSize)
+  plt.xlim(0, 25)
+  plt.ylim(0, 25)
+  plt.gca().grid(axis='both', linestyle='dotted')
+  plt.gca().set_axisbelow(True)
+  # plt.margins(y=10)
+  plt.legend([b[0] for b in lines], map(displayTag, overcommitTags))
+
+  outputName = 'figures/{}-overcommit-speedups.pdf'.format(config)
+  plt.savefig(outputName, bbox_inches='tight')
+  sys.stdout.write("[INFO] output written to {}\n".format(outputName))
+  plt.close()
+
+overcommitPlot('mpl-u')
+overcommitPlot('ocaml')
+
+##############################################################################
+# MULTI SPEEDUPS
+
+procs = [1,10,20,30,36,40,50,60,70,72,80,90,100,110,120]
+
+fontSize = 18
+legendFontSize = 12
+markerSize = 8
+
+def multiPlot(config, theseTags, fileNameSuffix="", useMLtonBaseline=False):
+  # theseTags = ocamlTags if config == 'ocaml' else multiTags
+  max_x = 121
+  max_y = 72
+  widthRatio = float(max_x) / float(max_y)
+  plt.figure(figsize=(7 * widthRatio, 7))
+  plt.plot(procs, procs, marker="", color="grey", linewidth=1.5)
+  plt.plot([36,36], [0,72], marker="", color="black", linewidth=1.5, linestyle="dashed")
+  plt.plot([72,72], [0,72], marker="", color="black", linewidth=1.5, linestyle="dashed")
+  lines = []
+  for (i, tag) in enumerate(theseTags):
+    try:
+      if useMLtonBaseline:
+        baseline = averageTime(D, 'mlton', tag, 1)
+      else:
+        btms = [
+          averageTime(D, 'mpl-u', tag, 1),
+          averageTime(D, 'ocaml', tag, 1)
+        ]
+        baseline = min(t for t in btms if t is not None)
+
+      # baseline = averageTime(MD, baselineConfig, tag, 1, checkExpType=False)
+      def su(p):
+        try:
+          return baseline / averageTime(MD, config, tag, p, checkExpType=False)
+        except Exception as e:
+          sys.stderr.write('[WARN] error while plotting multi speedup for {} at P={}: {}\n'.format(tag, p, e))
+          return None
+      speedups = map(su, procs)
+      color = colors[i % len(colors)]
+      marker = markers[i % len(markers)]
+      linestyle = linestyles[i / len(markers)]
+      lines.append(plt.plot(procs, speedups, linestyle=linestyle, marker=marker, markersize=markerSize, linewidth=1, color=color))
+    except Exception as e:
+      sys.stderr.write('[WARN] error while plotting multi speedup for {}: {}\n'.format(tag, e))
+
+  # this sets the legend.
+  font = {
+    'size': legendFontSize,
+    #'family' : 'normal',
+    #'weight' : 'bold',
+  }
+  matplotlib.rc('font', **font)
+
+  # make sure to use truetype fonts
+  matplotlib.rcParams['pdf.fonttype'] = 42
+  matplotlib.rcParams['ps.fonttype'] = 42
+
+  # set legend position
+  matplotlib.rcParams['legend.loc'] = 'upper left'
+
+  ticks = [1,10,20,30,40,50,60,70,80,90,100,110,120]
+
+  plt.xlabel('Threads', fontsize=fontSize)
+  plt.ylabel('Speedup', fontsize=fontSize)
+  plt.yticks(ticks, fontsize=fontSize)
+  plt.xticks(ticks, fontsize=fontSize)
+  plt.xlim(0, max_x)
+  plt.ylim(0, max_y)
+  plt.gca().grid(axis='both', linestyle='dotted')
+  plt.gca().set_axisbelow(True)
+  # plt.margins(y=10)
+  plt.legend([b[0] for b in lines], map(displayTag, theseTags))
+
+  outputName = 'figures/{}-multi-speedups{}.pdf'.format(config, fileNameSuffix)
+  plt.savefig(outputName, bbox_inches='tight')
+  sys.stdout.write("[INFO] output written to {}\n".format(outputName))
+  plt.close()
+
+multiPlot('mpl-u', ocamlTags)
+multiPlot('ocaml', ocamlTags)
+multiPlot('mpl-u', multiTags, fileNameSuffix="-full", useMLtonBaseline=True)
+
+
+##############################################################################
+# NORMALIZED MULTI SPEEDUPS
+
+procs = [1,10,20,30,36,40,50,60,70,72,80,90,100,110]
+effectiveProcs = [2*p for p in procs]
+
+def normalizedMultiPlot(config, theseTags, fileNameSuffix="", useMLtonBaseline=False, legend=True, max_y=85, legend_ncol=5, bbox_to_anchor=(-0.05,1), legend_loc="lower left", fontSize=24, legendFontSize=20, markerSize=12, linewidth=1.8):
+  # theseTags = ocamlTags if config == 'ocaml' else multiTags
+  max_x = 222
+  widthRatio = float(max_x) / float(max_y)
+  plt.figure(figsize=(7 * widthRatio, 7))
+  plt.plot(effectiveProcs, effectiveProcs, marker="", color="grey", linewidth=linewidth)
+  plt.plot([72,72], [0,144], marker="", color="black", linewidth=linewidth, linestyle="dashed")
+  plt.plot([144,144], [0,144], marker="", color="black", linewidth=linewidth, linestyle="dashed")
+  lines = []
+  for (i, tag) in enumerate(theseTags):
+    try:
+      if useMLtonBaseline:
+        baseline = averageTime(D, 'mlton', tag, 1)
+      else:
+        btms = [
+          averageTime(D, 'mpl-u', tag, 1),
+          averageTime(D, 'ocaml', tag, 1)
+        ]
+        baseline = min(t for t in btms if t is not None)
+
+      # baseline = averageTime(MD, baselineConfig, tag, 1, checkExpType=False)
+      def su(p):
+        try:
+          return 2.0 * baseline / averageTime(MD, config, tag, p, checkExpType=False)
+        except Exception as e:
+          sys.stderr.write('[WARN] error while plotting normalized multi speedup for {} at P={}: {}\n'.format(tag, p, e))
+          return None
+      speedups = map(su, procs)
+      color = colors[i % len(colors)]
+      marker = markers[i % len(markers)]
+      linestyle = linestyles[i / len(markers)]
+      lines.append(plt.plot(effectiveProcs, speedups, linestyle=linestyle, marker=marker, markersize=markerSize, linewidth=linewidth, color=color))
+    except Exception as e:
+      sys.stderr.write('[WARN] error while plotting normalized multi speedup for {}: {}\n'.format(tag, e))
+
+  # this sets the legend.
+  font = {
+    'size': legendFontSize,
+    #'family' : 'normal',
+    #'weight' : 'bold',
+  }
+  matplotlib.rc('font', **font)
+
+  # make sure to use truetype fonts
+  matplotlib.rcParams['pdf.fonttype'] = 42
+  matplotlib.rcParams['ps.fonttype'] = 42
+
+  # set legend position
+  matplotlib.rcParams['legend.loc'] = 'upper left'
+
+  # ticks = [1,10,20,30,40,50,60,70,80,90,100,110,120]
+  ticks = [1] + range(20, 222, 20)
+  yticks = [1] + range(10, max_y, 10)
+
+  plt.xlabel('Threads', fontsize=fontSize)
+  # plt.ylabel('Speedup', fontsize=fontSize)
+  plt.yticks(yticks, fontsize=fontSize)
+  plt.xticks(ticks, fontsize=fontSize)
+  plt.xlim(0, max_x)
+  plt.ylim(0, max_y)
+  plt.gca().grid(axis='both', linestyle='dotted')
+  plt.gca().set_axisbelow(True)
+  # plt.margins(y=10)
+  if legend:
+    # plt.legend([b[0] for b in lines], map(displayTag, theseTags))
+    plt.legend(
+      [b[0] for b in lines],
+      map(displayTag, theseTags),
+      bbox_to_anchor=bbox_to_anchor,
+      loc=legend_loc,
+      ncol=legend_ncol
+    )
+
+  outputName = 'figures/{}-norm-multi-speedups{}.pdf'.format(config, fileNameSuffix)
+  plt.savefig(outputName, bbox_inches='tight')
+  sys.stdout.write("[INFO] output written to {}\n".format(outputName))
+  plt.close()
+
+normalizedMultiPlot('mpl-u', ocamlTags, max_y=95, legend=False, fontSize=30, markerSize=18, linewidth=2)
+normalizedMultiPlot('ocaml', ocamlTags, max_y=95, legend_ncol=3, bbox_to_anchor=(-0.05,1), legend_loc="lower left", fontSize=30, legendFontSize=25, markerSize=18, linewidth=2)
+normalizedMultiPlot('mpl-u', multiTags, fileNameSuffix="-full", useMLtonBaseline=True, legend=True, legend_ncol=5, bbox_to_anchor=(-0.05,1), legend_loc="lower left")
+
+
+##############################################################################
+# OCAML SPEEDUP COMPARISON
+
+import matplotlib.ticker as ticker
+import matplotlib.transforms as transforms
+
+def interleave(a, b):
+  return [ x for t in zip(a, b) for x in t ]
+def left(ab):
+  return [ ab[2*i] for i in xrange(0, len(ab)/2) ]
+def right(ab):
+  return [ ab[2*i+1] for i in xrange(0, len(ab)/2) ]
+
+def baseline(tag):
+  mpltm = tm(averageTime(D, 'mpl-u', tag, 1))
+  ocamltm = tm(averageTime(D, 'ocaml', tag, 1))
+  return min(mpltm, ocamltm)
+
+def ocamlSpeedup(tag):
+  return int(round(baseline(tag) / tm(averageTime(D, 'ocaml', tag, 72))))
+
+def mplSpeedup(tag):
+  return int(round(baseline(tag) / tm(averageTime(D, 'mpl-u', tag, 72))))
+
+# ocamlDisplayTags = [ "{}({})".format(displayTag(t), baseline(t)) for t in ocamlTags ]
+ocamlDisplayTags = [ "{}".format(displayTag(t)) for t in ocamlTags ]
+
+N = len(ocamlTags)
+yA = [ ocamlSpeedup(tag) for tag in ocamlTags ]
+yB = [ mplSpeedup(tag) for tag in ocamlTags ]
+y = interleave(yA, yB)
+
+ocamlGM = int(round(geomean(yA)))
+mplGM = int(round(geomean(yB)))
+
+ytickSpacing = 10
+yMin = 0.0 #min(y) - 0.1
+yMax = 65
+
+yBottom = 0.0
+heights = [ h-yBottom for h in y ]
+groupWidth = 0.5
+barWidth = groupWidth * 1.5
+
+xCenters = [ 2*i for i in xrange(0, N) ]
+x = [ xx for i in xCenters for xx in [i-barWidth/2, i+barWidth/2] ]
+
+fontSize = 18
+xFontSize = 14
+legendFontSize = 16
+
+fig, ax = plt.subplots(1,1)
+# fig.subplots_adjust(bottom=0.4)
+fig.set_size_inches(5, 2.5)
+
+ax.set_axisbelow(True)
+ax.grid(axis='y', linestyle='solid')
+# plt.gca().grid(axis='both', linestyle='dotted')
+plt.tick_params(direction='out')
+ax.set_ylabel('Speedup', fontsize=fontSize)
+ax.set_ylim([yMin,yMax])
+ax.set_xlim([min(x)-1,max(x)+1])
+ax.yaxis.set_major_locator(ticker.MultipleLocator(ytickSpacing))
+# plt.axhline(y=1, color='black')
+
+plt.axhline(y=ocamlGM, color='red', linewidth=1.5, linestyle='dashed', zorder=1)
+# plt.annotate("OCaml:\nmean {}x".format(ocamlGM), (max(x)+1, ocamlGM), fontsize=7, va='center', ha='left', color='red')
+
+plt.axhline(y=mplGM, color='darkturquoise', linewidth=1.5, linestyle='solid', zorder=1)
+# plt.annotate("MPL:\nmean {}x".format(mplGM), (max(x)+1, mplGM), fontsize=7, va='center', ha='left', color='darkturquoise')
+
+ax.set_xticks(xCenters)
+ax.set_xticklabels(ocamlDisplayTags, rotation=45, ha='right', fontsize=xFontSize)
+ax.spines['right'].set_visible(False)
+ax.spines['top'].set_visible(False)
+ax.yaxis.set_ticks_position('left')
+ax.xaxis.set_ticks_position('bottom')
+plt.bar(left(x), left(heights), align='center', bottom=0, color='red', linewidth=0.75, edgecolor='black', width=barWidth, label='OCaml', zorder=2, hatch='///')
+plt.bar(right(x), right(heights), align='center', bottom=0, color='darkturquoise', linewidth=0.75, edgecolor='black', width=barWidth, label='MPL', zorder=2)
+ax.legend(loc='upper right', fontsize=legendFontSize)
+
+offset = transforms.ScaledTranslation(10/72., 0, fig.dpi_scale_trans)
+for label in ax.xaxis.get_majorticklabels():
+  label.set_transform(label.get_transform() + offset)
+
+def ann(t):
+  return "{}".format(t)
+
+if False:
+  for i in xrange(0, 2*N, 2):
+    if abs(y[i] - y[i+1]) < 0.02 and y[i] < yMax and y[i+1] < yMax:
+      yy = max(y[i], y[i+1])
+      # if yy >= yMax:
+      #   print("[INFO] value {} exceeds {}".format(ann(yy), ann(yMax)))
+      #   plt.annotate(ann(yy), (xCenters[i/2] + 1.2 * barWidth, yMax), ha='left', va='top', fontsize=7)
+      # else:
+      plt.annotate(ann(yy), (xCenters[i/2], yy+0.03), ha='center', fontsize=7)
+    else:
+      if y[i] >= yMax:
+        plt.annotate(ann(y[i]), (xCenters[i/2] - 1.2 * barWidth, yMax), ha='right', va='top', fontsize=7)
+      elif y[i] < 1:
+        plt.annotate(ann(y[i]), (x[i], y[i]-0.03), va='top', ha='center', fontsize=7)
+      else:
+        plt.annotate(ann(y[i]), (x[i], y[i]+0.1), ha='center', fontsize=7)
+
+      if y[i+1] >= yMax:
+        plt.annotate(ann(y[i+1]), (xCenters[i/2] + 1.2 * barWidth, yMax), ha='left', va='top', fontsize=7)
+      elif y[i+1] < 1:
+        plt.annotate(ann(y[i+1]), (x[i+1], y[i+1]-0.03), va='top', ha='center', fontsize=7)
+      else:
+        plt.annotate(ann(y[i+1]), (x[i+1], y[i+1]+0.5), ha='center', fontsize=7)
+
+
+# for i in xrange(0, 2*N):
+#   if y[i] >= yMax:
+#     if i % 2 == 0:
+#       plt.annotate(str(tm(y[i])), (x[i] - 1.2 * barWidth/2, yMax), ha='right', va='top', fontsize=8)
+#     else:
+#       plt.annotate(str(tm(y[i])), (x[i] + 1.2 * barWidth/2, yMax), ha='left', va='top', fontsize=8)
+#   else:
+#     plt.annotate(str(tm(y[i])), (x[i], y[i]+0.01), ha='center', fontsize=8)
+
+# fig.tight_layout()
+outputName = 'figures/bar-speedups-vs-ocaml.pdf'
+plt.savefig(outputName, bbox_inches="tight")
+sys.stdout.write("[INFO] output written to {}\n".format(outputName))
+plt.close()
+
+##############################################################################
+# OCAML COMPARISON
+
+# fontSize = 20
+# legendFontSize = 18
+# markerSize = 6
+
+fontSize = 30
+legendFontSize = 24
+markerSize = 10
+
+linewidth = 1.5
+
+for tag in ocamlTags:
+  outputName = 'figures/{}-speedups-vs-ocaml.pdf'.format(tag)
+  try:
+    theseConfigs = ["mpl-u","ocaml"]
+
+    plt.figure(figsize=(7,7))
+    # markers = ['o','v','^','<','>','s','*','d','D','+','x','|','','','','','']
+    # colors = ['blue', 'green', 'red', 'darkturquoise', 'black', 'darkviolet', 'goldenrod', 'dimgrey']
+    # markers = ['o','v','^','<','>','s','d','D','*']
+    # linestyles = ['solid', 'dashed']
+    # markers = ['.'] * len(speedupTags)
+    procs = [1,10,20,30,40,50,60,72]
+
+    tms = [
+      # averageTime(D, 'mlton', tag, 1),
+      averageTime(D, 'mpl-u', tag, 1),
+      averageTime(D, 'ocaml', tag, 1)
+    ]
+    baseline = min(t for t in tms if t is not None)
+
+    plt.plot(procs, procs, marker="", color="grey", linewidth=1.1*linewidth)
+    lines = []
+    for (i, config) in enumerate(theseConfigs):
+      try:
+        speedups = map(lambda p: baseline / averageTime(D, config, tag, p), procs)
+        color = colors[i % len(colors)]
+        marker = markers[i % len(markers)]
+        linestyle = linestyles[i / len(markers)]
+        lines.append(plt.plot(procs, speedups, linestyle=linestyle, marker=marker, markersize=markerSize, linewidth=linewidth, color=color))
+      except Exception as e:
+        sys.stderr.write("[WARN] in {} skipping {}.{}: {}\n".format(outputName, tag, config, e))
+        continue
+
+    # this sets the legend.
+    font = {
+      'size': legendFontSize,
+      #'family' : 'normal',
+      #'weight' : 'bold',
+    }
+    matplotlib.rc('font', **font)
+
+    # make sure to use truetype fonts
+    matplotlib.rcParams['pdf.fonttype'] = 42
+    matplotlib.rcParams['ps.fonttype'] = 42
+
+    # set legend position
+    matplotlib.rcParams['legend.loc'] = 'upper left'
+
+    ticks = [i*10 for i in xrange(0, 8)]
+
+    # plt.xlabel('Processors', fontsize=fontSize)
+    # plt.ylabel('Speedup', fontsize=fontSize)
+    plt.yticks(ticks, fontsize=fontSize)
+    plt.xticks(ticks, fontsize=fontSize)
+    plt.gca().grid(axis='both', linestyle='dotted')
+    plt.gca().set_axisbelow(True)
+    # plt.margins(y=10)
+    plt.legend([b[0] for b in lines], theseConfigs)
+
+    plt.savefig(outputName, bbox_inches='tight')
+    sys.stdout.write("[INFO] output written to {}\n".format(outputName))
+
+    plt.close()
+
+  except Exception as e:
+    sys.stderr.write("[WARN] error while generating {}: {}\n".format(outputName, e))
+
+##############################################################################
+# DIRECT SPACE COMPARISONS
+
+def gb(kb):
+  try:
+    return kb / (1000.0 * 1000.0)
+  except:
+    return None
+
+if False:
+  for tag in orderedTags:
+    outputName = 'figures/{}-space.pdf'.format(tag)
+    try:
+      theseConfigs = ["mpl-u","mpl-hoard","ocaml"]
+
+      plt.figure(figsize=(7,7))
+      # markers = ['o','v','^','<','>','s','*','d','D','+','x','|','','','','','']
+      colors = ['blue', 'green', 'red', 'darkturquoise', 'black', 'darkviolet', 'goldenrod', 'dimgrey']
+      markers = ['o','v','^','<','>','s','d','D','*']
+      linestyles = ['solid', 'dashed']
+
+      # markers = ['.'] * len(speedupTags)
+      procs = [1,10,20,30,40,50,60,72]
+
+      lines = []
+      mltonSp = gb(averageSpace(D, 'mlton', tag, 1))
+      lines.append(plt.plot(procs, [mltonSp for p in procs], marker="", color="grey", linewidth=1.1*linewidth))
+      for (i, config) in enumerate(theseConfigs):
+        spaces = map(lambda p: gb(averageSpace(D, config, tag, p)), procs)
+        color = colors[i % len(colors)]
+        marker = markers[i % len(markers)]
+        linestyle = linestyles[i / len(markers)]
+        lines.append(plt.plot(procs, spaces, linestyle=linestyle, marker=marker, markersize=markerSize, linewidth=linewidth, color=color))
+
+      # this sets the legend.
+      font = {
+        'size': legendFontSize,
+        #'family' : 'normal',
+        #'weight' : 'bold',
+      }
+      matplotlib.rc('font', **font)
+
+      # make sure to use truetype fonts
+      matplotlib.rcParams['pdf.fonttype'] = 42
+      matplotlib.rcParams['ps.fonttype'] = 42
+
+      # set legend position
+      matplotlib.rcParams['legend.loc'] = 'upper left'
+
+      ticks = [i*10 for i in xrange(0, 8)]
+
+      # plt.xlabel('Processors', fontsize=fontSize)
+      # plt.ylabel('Speedup', fontsize=fontSize)
+      # plt.yticks(ticks, fontsize=fontSize)
+      plt.xticks(ticks, fontsize=fontSize)
+      plt.gca().grid(axis='both', linestyle='dotted')
+      plt.gca().set_axisbelow(True)
+      # plt.margins(y=10)
+      plt.legend([b[0] for b in lines], ['mlton'] + theseConfigs)
+
+      plt.savefig(outputName, bbox_inches='tight')
+      sys.stdout.write("[INFO] output written to {}\n".format(outputName))
+
+      plt.close()
+
+    except Exception as e:
+      sys.stderr.write("[WARN] error while generating {}: {}\n".format(outputName, e))
+
+##############################################################################
+# PERF SURFACE
+
+if False:
+  for tag in orderedTags:
+    outputName = 'figures/{}-perf-surface.pdf'.format(tag)
+    try:
+      # theseConfigs = ["mpl-hoard","mpl-ccc","ocaml"]
+      theseConfigs = ["mpl-ccc","ocaml"]
+
+      plt.figure(figsize=(7,7))
+      fig, ax = plt.subplots()
+      # markers = ['o','v','^','<','>','s','*','d','D','+','x','|','','','','','']
+      colors = ['blue', 'green', 'red', 'darkturquoise', 'black', 'darkviolet', 'goldenrod', 'dimgrey']
+      markers = ['o','v','^','<','>','s','d','D','*']
+      linestyles = ['solid', 'dashed']
+
+      # markers = ['.'] * len(speedupTags)
+      procs = [1,10,20,30,40,50,60,72]
+
+      stuff = []
+
+      mltonT = averageTime(D, 'mlton', tag, 1)
+      mltonR = gb(averageSpace(D, 'mlton', tag, 1))
+      stuff.append(plt.scatter([mltonR], [mltonT], marker="+", color="grey", label="mlton"))
+
+      for (i, config) in enumerate(theseConfigs):
+        times = map(lambda p: averageTime(D, config, tag, p), procs)
+        spaces = map(lambda p: gb(averageSpace(D, config, tag, p)), procs)
+        color = colors[i % len(colors)]
+        marker = markers[i % len(markers)]
+        # linestyle = linestyles[i / len(markers)]
+        stuff.append(plt.scatter(spaces, times, marker=marker, color=color, label=config))
+
+        # for i, p in enumerate(procs):
+        #   ax.annotate(p, (spaces[i], times[i]))
+
+      # this sets the legend.
+      font = {
+        'size': legendFontSize,
+        #'family' : 'normal',
+        #'weight' : 'bold',
+      }
+      matplotlib.rc('font', **font)
+
+      # make sure to use truetype fonts
+      matplotlib.rcParams['pdf.fonttype'] = 42
+      matplotlib.rcParams['ps.fonttype'] = 42
+
+      # set legend position
+      matplotlib.rcParams['legend.loc'] = 'upper right'
+
+      # ticks = [i*10 for i in xrange(0, 8)]
+
+      # plt.xlabel('Processors', fontsize=fontSize)
+      # plt.ylabel('Speedup', fontsize=fontSize)
+      # plt.yticks(ticks, fontsize=fontSize)
+      # plt.xticks(ticks, fontsize=fontSize)
+      plt.gca().grid(axis='both', linestyle='dotted')
+      plt.gca().set_axisbelow(True)
+      # plt.margins(y=10)
+      plt.legend()
+
+      plt.savefig(outputName, bbox_inches='tight')
+      sys.stdout.write("[INFO] output written to {}\n".format(outputName))
+
+      plt.close()
+
+    except Exception as e:
+      sys.stderr.write("[WARN] error while generating {}: {}\n".format(outputName, e))
+
+# ============================================================================
+
+print("[INFO] done reporting {}".format(timingsFile))

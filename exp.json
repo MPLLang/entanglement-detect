@@ -31,7 +31,7 @@
     },
 
   "jqselect":
-    "((.exp == \"space\" and .trials == \"10\") or (.exp == \"time\" and .trials == \"1\"))        and         ((.config == \"mlton\" and .procs == \"1\") or (.config == \"mpl\" and (.procs == \"1\" or .procs == \"72\")) or (.config == \"mpl-detect-no-suspects\" and (.procs == \"1\" or .procs == \"72\")) or (.config == \"mpl-detect\"))",
+    "(.trials == \"1\" or (.exp == \"space\" and .procs == \"72\" and .trials == \"10\"))        and         ((.config == \"mlton\" and .procs == \"1\") or (.config == \"mpl\" and (.procs == \"1\" or .procs == \"72\")) or (.config == \"mpl-detect-no-suspects\" and (.procs == \"1\" or .procs == \"72\")) or (.config == \"mpl-detect\"))",
 
   "specs":
     [
@@ -174,6 +174,11 @@
         "tag": ["interval-tree"],
         "bench": ["interval-tree"],
         "args": ["-n 1000000 -q 100"]
+      },
+      {
+        "tag": ["delaunay-triangulate"],
+        "bench": ["delaunay"],
+        "args": ["-n 1000000"]
       }
     ]
 }
