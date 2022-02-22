@@ -509,15 +509,17 @@ def defaultAlign(i):
   return "r" if i == 0 else "l"
 
 
-headers1 = ['', '   P=1', None, '   P={}'.format(maxp), None]
-headers2 = ['Benchmark', 'MPL', 'D', 'MPL', 'D']
+headers1 = ['', '   P=1', None, None, '   P={}'.format(maxp), None, None]
+headers2 = ['Benchmark', 'MPL', 'D', 'DNS', 'MPL', 'D', 'DNS']
 tt = [headers1, "-", headers2, "="]
 for tag in orderedTags:
   thisRow = [displayTag(tag),
              tm(averageTime(D, 'mpl', tag, 1)),
              tm(averageTime(D, 'mpl-detect', tag, 1)),
+             tm(averageTime(D, 'mpl-detect-no-suspects', tag, 1)),
              tm(averageTime(D, 'mpl', tag, maxp)),
              tm(averageTime(D, 'mpl-detect', tag, maxp)),
+             tm(averageTime(D, 'mpl-detect-no-suspects', tag, maxp)),
             ]
   thisRow = [thisRow[0]] + [str(x) if x is not None else "--" for x in thisRow[1:]]
   tt.append(thisRow)
@@ -586,16 +588,16 @@ for tag in orderedTags:
   rMPLcc1 = averageSpace(D, 'mpl-detect', tag, 1)
   rMPLccp = averageSpace(D, 'mpl-detect', tag, maxp)
 
-  t1 = color_pcd(tMPLcc1, tMPL1)
-  tp = color_pcd(tMPLccp, tMPLp)
-  r1 = color_pcd(rMPLcc1, rMPL1)
-  rp = color_pcd(rMPLccp, rMPLp)
+  t1 = color_pcd(tMPL1, tMPLcc1)
+  tp = color_pcd(tMPLp, tMPLccp)
+  r1 = color_pcd(rMPL1, rMPLcc1)
+  rp = color_pcd(rMPLp, rMPLccp)
 
   row = [displayTag(tag), t1, tp, r1, rp]
   row = [x if x is not None else "--" for x in row]
   tt.append(row)
 
-print("MPL-DETECT versus MPL-DETECT-NO-SUSPECTS")
+print("MPL-DETECT-NO-SUSPECTS versus MPL-DETECT")
 print(table(tt, defaultAlign))
 print("")
 
