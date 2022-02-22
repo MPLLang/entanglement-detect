@@ -125,7 +125,7 @@ def displayTag(t):
   if t == "dmm":
     return "dense-matmul"
   if t == "ldd":
-    return "low-diameter-dc"
+    return "low-d-decomp"
   if t == "dedup":
     return "dedup-strings"
   return t
@@ -673,7 +673,7 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
-plt.figure(figsize=(7,7))
+plt.figure(figsize=(7.5,7.5))
 # markers = ['o','v','^','<','>','s','*','d','D','+','x','|','','','','','']
 colors = ['blue', 'green', 'red', 'darkturquoise', 'black', 'darkviolet', 'goldenrod', 'dimgrey']
 markers = ['o','v','^','<','>','s','d','D','*','+','x']
@@ -682,10 +682,12 @@ linestyles = ['solid', 'dashed', 'dotted']
 procs = P
 
 fontSize = 18
-legendFontSize = 12
-markerSize = 8
+legendFontSize = 14
+markerSize = 9
 
-plt.plot(procs, procs, marker="", color="grey", linewidth=0.5)
+maxdim = 74
+
+ideal = plt.plot([0,maxdim], [0,maxdim], marker="", color="grey", linewidth=0.75)
 lines = []
 for (i, tag) in enumerate(speedupTags):
   try:
@@ -700,7 +702,7 @@ for (i, tag) in enumerate(speedupTags):
     color = colors[i % len(colors)]
     marker = markers[i % len(markers)]
     linestyle = linestyles[i / len(markers)]
-    lines.append(plt.plot(procs, speedups, linestyle=linestyle, marker=marker, markersize=markerSize, linewidth=1, color=color))
+    lines.append(plt.plot(procs, speedups, linestyle=linestyle, marker=marker, markersize=markerSize, linewidth=1.25, color=color))
   except Exception as e:
     sys.stderr.write('[WARN] error while plotting speedup for {}: {}\n'.format(tag, e))
 
@@ -723,6 +725,8 @@ ticks = [1] + range(10, maxp, 10)
 
 plt.xlabel('Processors', fontsize=fontSize)
 plt.ylabel('Speedup', fontsize=fontSize)
+plt.xlim(0, maxdim)
+plt.ylim(0, maxdim)
 plt.yticks(ticks, fontsize=fontSize)
 plt.xticks(ticks, fontsize=fontSize)
 plt.gca().grid(axis='both', linestyle='dotted')
@@ -731,9 +735,9 @@ plt.gca().set_axisbelow(True)
 # plt.legend([b[0] for b in lines], map(displayTag, speedupTags))
 
 plt.legend(
-  [b[0] for b in lines],
-  map(displayTag, speedupTags),
-  bbox_to_anchor=(-0.1,1),
+  [b[0] for b in lines] + [ideal[0]],
+  map(displayTag, speedupTags) + ["(ideal)"],
+  bbox_to_anchor=(-0.15,1),
   loc="lower left",
   ncol=3
 )
