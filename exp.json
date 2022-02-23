@@ -31,7 +31,7 @@
     },
 
   "jqselect":
-    "(.trials == \"1\" or (.exp == \"space\" and .procs == \"72\" and .trials == \"10\"))        and         ((.config == \"mlton\" and .procs == \"1\") or (.config == \"mpl\" and (.procs == \"1\" or .procs == \"72\")) or (.config == \"mpl-detect-no-suspects\" and (.procs == \"1\" or .procs == \"72\")) or (.config == \"mpl-detect\"))",
+    "((.exp == \"time\" and .trials == \"1\") or (.exp == \"space\" and .procs == \"1\" and .trials == \"1\") or (.exp == \"space\" and .procs == \"72\" and .trials == \"10\"))        and         ((.config == \"mlton\" and .procs == \"1\") or (.config == \"mpl\" and (.procs == \"1\" or .procs == \"72\")) or (.config == \"mpl-detect-no-suspects\" and (.procs == \"1\" or .procs == \"72\")) or (.config == \"mpl-detect\"))",
 
   "specs":
     [
