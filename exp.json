@@ -86,6 +86,11 @@
         "args": ["-N 10000000"]
       },
       {
+        "tag": ["msort-strings"],
+        "bench": ["msort-strings"],
+        "args": ["../inputs/words64.txt"]
+      },
+      {
         "tag": ["centrality"],
         "bench": ["centrality"],
         "args": ["../inputs/rmat-10M-symm-bin"]

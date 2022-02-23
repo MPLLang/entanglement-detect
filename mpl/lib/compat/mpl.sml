@@ -65,13 +65,15 @@ struct
 
   fun report () =
     let
+      (* val numEChecks = MPL.GC.numberDisentanglementChecks () *)
     in
       print ("======== GC Stats ========\n");
       p "local reclaimed" (LargeInt.toString o MPL.GC.localBytesReclaimed);
       p "num local" (LargeInt.toString o MPL.GC.numLocalGCs);
       p "local gc time" (LargeInt.toString o Time.toMilliseconds o MPL.GC.localGCTime);
       p "promo time" (LargeInt.toString o Time.toMilliseconds o MPL.GC.promoTime);
-      p "internal reclaimed" (LargeInt.toString o MPL.GC.internalBytesReclaimed)
+      p "internal reclaimed" (LargeInt.toString o MPL.GC.internalBytesReclaimed);
+      p "e-checks" (LargeInt.toString o MPL.GC.numberDisentanglementChecks)
     end
 
 end

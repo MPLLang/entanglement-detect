@@ -435,7 +435,8 @@ orderedTags = sorted(list(foundTags), key=displayTag)
 
 def keepTag(t):
   return (t not in [
-      "spanner", "interval-tree", "lu-decomp", "nbody", "binarytrees5", "bfs"
+      "spanner", "interval-tree", "lu-decomp", "nbody", "binarytrees5", "bfs",
+      "msort"
     ])
 
 orderedTags = [ t for t in orderedTags if keepTag(t) ]
