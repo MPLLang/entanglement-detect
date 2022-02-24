@@ -75,11 +75,6 @@
         "args": ["../inputs/words64.txt"]
       },
       {
-        "tag": ["centrality"],
-        "bench": ["centrality"],
-        "args": ["../inputs/rmat-10M-symm-bin"]
-      },
-      {
         "tag": ["nearest-nbrs"],
         "bench": ["nn"],
         "args": ["-N 1000000"]

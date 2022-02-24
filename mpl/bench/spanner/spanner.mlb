@@ -1,4 +1,4 @@
-../../../../mpl-ocaml-comparison/mpl/lib/sources.mlb
+../../lib/sources.mlb
 ../ldd/LDD.sml
 Spanner.sml
 main.sml
