@@ -10,6 +10,10 @@
         "template": "/usr/bin/time -v bin/<bench>.<config>.bin @mpl <procs?procs {}> set-affinity -- <args?{} ><args1?{}> -repeat 20 -warmup 0"
       },
       {
+        "match": { "config": "mpl", "exp": "stats" },
+        "template": "bin/<bench>.<config>.bin @mpl <procs?procs {}> set-affinity -- <args?{} ><args1?{}> -repeat 1 -warmup 0"
+      },
+      {
         "match": { "config": "mlton", "exp": "time" },
         "template": "/usr/bin/time -v bin/<bench>.<config>.bin <args?{} ><args1?{}> -repeat 20 -warmup 5"
       },
@@ -26,12 +30,12 @@
       ],
       "config": ["mlton", "mpl", "mpl-detect", "mpl-detect-no-suspects"],
       "cwd": ["mpl"],
-      "exp": ["time", "space"],
+      "exp": ["time", "space", "stats"],
       "trials": ["1", "10"]
     },
 
   "jqselect":
-    "((.exp == \"time\" and .trials == \"1\") or (.exp == \"space\" and .procs == \"1\" and .trials == \"1\") or (.exp == \"space\" and .procs == \"72\" and .trials == \"10\"))        and         ((.config == \"mlton\" and .procs == \"1\") or (.config == \"mpl\" and (.procs == \"1\" or .procs == \"72\")) or (.config == \"mpl-detect-no-suspects\" and (.procs == \"1\" or .procs == \"72\")) or (.config == \"mpl-detect\"))",
+    "(  (.exp == \"stats\" and .trials == \"1\" and (.procs == \"1\" or .procs == \"1\") and (.config == \"mpl-detect\" or .config == \"mpl-detect-no-suspects\"))  or (.exp == \"time\" and .trials == \"1\") or (.exp == \"space\" and .procs == \"1\" and .trials == \"1\") or (.exp == \"space\" and .procs == \"72\" and .trials == \"10\"))        and         ((.config == \"mlton\" and .procs == \"1\") or (.config == \"mpl\" and (.procs == \"1\" or .procs == \"72\")) or (.config == \"mpl-detect-no-suspects\" and (.procs == \"1\" or .procs == \"72\")) or (.config == \"mpl-detect\"))",
 
   "specs":
     [

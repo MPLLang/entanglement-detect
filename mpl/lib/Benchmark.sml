@@ -48,10 +48,21 @@ struct
              )
 
       val _ = print (msg ^ "\n")
+
+      val sm0 = GCStats.susMarks ()
+      val ec0 = GCStats.eChecks ()
       val t0 = Time.now ()
       val (result, tms) = getTimes "time" rep f
       val t1 = Time.now ()
+      val sm1 = GCStats.susMarks ()
+      val ec1 = GCStats.eChecks ()
+
       val endToEnd = Time.- (t1, t0)
+      val sm = sm1 - sm0
+      val ec = ec1 - ec0
+
+      val averageSM = sm div (LargeInt.fromInt rep)
+      val averageEC = ec div (LargeInt.fromInt rep)
 
       val total = List.foldl Time.+ Time.zeroTime tms
       val avg = Time.toReal total / (Real.fromInt rep)
@@ -60,6 +71,10 @@ struct
       print ("average " ^ Real.fmt (StringCvt.FIX (SOME 4)) avg ^ "s\n");
       print ("total   " ^ Time.fmt 4 total ^ "s\n");
       print ("end-to-end " ^ Time.fmt 4 endToEnd ^ "s\n");
+      print ("tot-sus-mark " ^ LargeInt.toString sm ^ "\n");
+      print ("tot-e-check " ^ LargeInt.toString ec ^ "\n");
+      print ("avg-sus-mark " ^ LargeInt.toString averageSM ^ "\n");
+      print ("avg-e-check " ^ LargeInt.toString averageEC ^ "\n");
       result
     end
 

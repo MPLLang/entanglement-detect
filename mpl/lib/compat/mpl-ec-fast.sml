@@ -65,7 +65,8 @@ struct
   fun p name thing =
     print (name ^ ": " ^ thing () ^ "\n")
 
-  fun susMarks () : LargeInt.int = 0
+  fun susMarks () =
+    MPL.GC.numberSuspectsMarked ()
 
   fun eChecks () =
     MPL.GC.numberDisentanglementChecks ()
@@ -80,7 +81,9 @@ struct
       p "local gc time" (LargeInt.toString o Time.toMilliseconds o MPL.GC.localGCTime);
       p "promo time" (LargeInt.toString o Time.toMilliseconds o MPL.GC.promoTime);
       p "internal reclaimed" (LargeInt.toString o MPL.GC.internalBytesReclaimed);
-      p "e-checks" (LargeInt.toString o MPL.GC.numberDisentanglementChecks)
+      p "e-checks" (LargeInt.toString o MPL.GC.numberDisentanglementChecks);
+      p "sus-mark" (LargeInt.toString o MPL.GC.numberSuspectsMarked);
+      p "sus-clear" (LargeInt.toString o MPL.GC.numberSuspectsCleared)
     end
 
 end
