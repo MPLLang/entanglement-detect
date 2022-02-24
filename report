@@ -128,6 +128,8 @@ def displayTag(t):
     return "low-d-decomp"
   if t == "dedup":
     return "dedup-strings"
+  if t == "delaunay-triangulate":
+    return "delaunay"
   return t
 
 foundTags = set()
@@ -331,6 +333,16 @@ def geomean(iterable):
   except:
     return None
 
+def fmtImp(xx):
+  if xx is None:
+    return "--"
+  elif type(xx) is str:
+    return xx
+  elif xx >= 1.10:
+    return makeBold(ov(xx) + "x")
+  else:
+    return ov(xx) + "x"
+
 # =========================================================================
 
 delimWidth = 2
@@ -470,8 +482,8 @@ def parSpaceOverhead(tag):
 
 print "geomean 1-core time overhead", geomean([seqOverhead(t) for t in orderedTags])
 print "geomean 72-core time overhead", geomean([parOverhead(t) for t in orderedTags])
-# print "geomean 1-core space overhead", geomean([seqSpaceOverhead(t) for t in orderedTags])
-# print "geomean 72-core space overhead", geomean([parSpaceOverhead(t) for t in orderedTags])
+print "geomean 1-core space overhead", geomean([seqSpaceOverhead(t) for t in orderedTags])
+print "geomean 72-core space overhead", geomean([parSpaceOverhead(t) for t in orderedTags])
 
 # ===========================================================================
 
@@ -664,6 +676,38 @@ with open(mltonTimeCmpTable, 'w') as output:
     output.write(" & ".join([displayTag(tag)] + row))
     output.write("  \\\\\n")
 print("[INFO] wrote to {}".format(mltonTimeCmpTable))
+
+# ============================================================================
+
+imps1 = []
+impsP = []
+
+suspectsCmp = "figures/suspects-comparison.tex"
+with open(suspectsCmp, 'w') as output:
+  for tag in orderedTags:
+    sus1 = tm(averageTime(D, 'mpl-detect', tag, 1))
+    susp = tm(averageTime(D, 'mpl-detect', tag, maxp))
+    nosus1 = tm(averageTime(D, 'mpl-detect-no-suspects', tag, 1))
+    nosusp = tm(averageTime(D, 'mpl-detect-no-suspects', tag, maxp))
+
+    row = \
+      [ fmtImp(sd(nosus1, sus1))
+      , fmtImp(sd(nosusp, susp))
+      ]
+
+    imps1.append(ovv(sd(nosus1, sus1)))
+    impsP.append(ovv(sd(nosusp, susp)))
+
+    row = [ fmt(x) for x in row ]
+    output.write(" & ".join([displayTag(tag)] + row))
+    output.write("  \\\\\n")
+  output.write("\\midrule\n")
+print("[INFO] wrote to {}".format(suspectsCmp))
+
+with open("figures/suspects-comparison-geomeans.tex", 'w') as output:
+  row = ["geomean", fmtImp(geomean(imps1)), fmtImp(geomean(impsP))]
+  output.write(" & ".join(row))
+  output.write("\\\\\n")
 
 # ============================================================================
 
