@@ -99,7 +99,8 @@ statsPatterns = \
   [ #("time", float, reCompile(r"^end-to-end\s+(\d+.\d+)s$"))
   #,
     ("space", parseKiB, reCompile(r"^\s*Maximum resident set size \(kbytes\): (\d+).*$"))
-  # , ("num-local", int, reCompile(r"^num local: (\d+)$"))
+  , ("sus-mark", int, reCompile(r"^avg-sus-mark: (\d+)$"))
+  , ("e-check", int, reCompile(r"^avg-e-check: (\d+)$"))
   # , ("local-reclaimed", parseB, reCompile(r"^local reclaimed: (\d+)$"))
   # , ("local-time", int, reCompile(r"^local gc time: (\d+)$"))
   # , ("promo-time", int, reCompile(r"^promo time: (\d+)$"))
@@ -185,6 +186,22 @@ def averageSpace(data, config, tag, procs):
   try:
     sp = sp[-10:]
     return sum(sp) / len(sp)
+  except:
+    return None
+
+def averageSusMarks(data, config, tag, procs):
+  trials = [ r for r in findTrials(data, config, tag, procs) if r['exp'] == 'stats' ]
+  sm = [ r['sus-mark'] for r in trials if 'sus-mark' in r ]
+  try:
+    return sm[-1]
+  except:
+    return None
+
+def averageEChecks(data, config, tag, procs):
+  trials = [ r for r in findTrials(data, config, tag, procs) if r['exp'] == 'stats' ]
+  ec = [ r['e-check'] for r in trials if 'e-check' in r ]
+  try:
+    return ec[-1]
   except:
     return None
 
