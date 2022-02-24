@@ -55,11 +55,6 @@
         "args": ["-size 1000000"]
       },
       {
-        "tag": ["binarytrees5"],
-        "bench": ["ocaml-binarytrees5"],
-        "args": ["-max_depth 19"]
-      },
-      {
         "tag": ["raytracer"],
         "bench": ["ray"],
         "args": ["-n 1000 -m 1000"]
@@ -73,21 +68,6 @@
         "tag": ["game-of-life"],
         "bench": ["ocaml-game-of-life"],
         "args": ["-n_times 100 -board_size 1024"]
-      },
-      {
-        "tag": ["nbody"],
-        "bench": ["ocaml-nbody-imm"],
-        "args": ["-n 500 -num_bodies 1024"]
-      },
-      {
-        "tag": ["lu-decomp"],
-        "bench": ["ocaml-lu-decomp"],
-        "args": ["-mat_size 1024"]
-      },
-      {
-        "tag": ["msort"],
-        "bench": ["msort"],
-        "args": ["-N 10000000"]
       },
       {
         "tag": ["msort-strings"],
@@ -140,11 +120,6 @@
         "args": ["~/data/graph/adj/rmat-10M-symm-bin"]
       },
       {
-        "tag": ["bfs"],
-        "bench": ["bfs"],
-        "args": ["~/data/graph/adj/rmat-10M-symm-bin"]
-      },
-      {
         "tag": ["centrality"],
         "bench": ["centrality"],
         "args": ["~/data/graph/adj/rmat-10M-symm-bin"]
@@ -178,11 +153,6 @@
         "tag": ["range-query"],
         "bench": ["range-tree"],
         "args": ["-n 1000000 -q 1000000"]
-      },
-      {
-        "tag": ["interval-tree"],
-        "bench": ["interval-tree"],
-        "args": ["-n 1000000 -q 100"]
       },
       {
         "tag": ["delaunay-triangulate"],
