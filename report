@@ -99,8 +99,8 @@ statsPatterns = \
   [ #("time", float, reCompile(r"^end-to-end\s+(\d+.\d+)s$"))
   #,
     ("space", parseKiB, reCompile(r"^\s*Maximum resident set size \(kbytes\): (\d+).*$"))
-  , ("sus-mark", int, reCompile(r"^avg-sus-mark: (\d+)$"))
-  , ("e-check", int, reCompile(r"^avg-e-check: (\d+)$"))
+  , ("sus-mark", int, reCompile(r"^avg-sus-mark (\d+)$"))
+  , ("e-check", int, reCompile(r"^avg-e-check (\d+)$"))
   # , ("local-reclaimed", parseB, reCompile(r"^local reclaimed: (\d+)$"))
   # , ("local-time", int, reCompile(r"^local gc time: (\d+)$"))
   # , ("promo-time", int, reCompile(r"^promo time: (\d+)$"))
@@ -359,6 +359,24 @@ def fmtImp(xx):
     return makeBold(ov(xx) + "x")
   else:
     return ov(xx) + "x"
+
+def fmtCount(xx):
+  if xx is None:
+    return "--"
+  elif type(xx) is str:
+    return xx
+
+  K = 1000
+  M = 1000 * K
+  B = 1000 * M
+  if xx >= B:
+    return "{:.0f}B".format(xx / B)
+  if xx >= M:
+    return "{:.0f}M".format(xx / M)
+  if xx >= K:
+    return "{:.0f}K".format(xx / K)
+  else:
+    return str(int(round(xx)))
 
 # =========================================================================
 
@@ -707,9 +725,22 @@ with open(suspectsCmp, 'w') as output:
     nosus1 = tm(averageTime(D, 'mpl-detect-no-suspects', tag, 1))
     nosusp = tm(averageTime(D, 'mpl-detect-no-suspects', tag, maxp))
 
+    marks1 = averageSusMarks(D, 'mpl-detect', tag, 1)
+    susChecks1 = averageEChecks(D, 'mpl-detect', tag, 1)
+    allChecks1 = averageEChecks(D, 'mpl-detect-no-suspects', tag, 1)
+
+    # try:
+    #   ratNotSuspicious = 1.0 - (susChecks1 / allChecks1)
+    #   pctNotSuspicious = str(int(round(100 * ratNotSuspicious))) + "\%"
+    # except:
+    #   pctNotSuspicious = "--"
+
     row = \
       [ fmtImp(sd(nosus1, sus1))
       , fmtImp(sd(nosusp, susp))
+      , fmtCount(allChecks1)
+      , fmtCount(susChecks1)
+      , fmtCount(marks1)
       ]
 
     imps1.append(ovv(sd(nosus1, sus1)))
