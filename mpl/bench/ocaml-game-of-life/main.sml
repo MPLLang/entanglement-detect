@@ -33,10 +33,16 @@ fun randBool pos =
 
 val bs = board_size
 
+fun vtab f n = Vector.tabulate (n, f)
+fun vnth v i = Vector.sub (v, i)
+
+fun atab f n = Array.tabulate (n, f)
+fun anth a i = Array.sub (a, i)
+
 val rg =
-  ref (Seq.tabulate (fn i => Seq.tabulate (fn j => randBool (i*bs + j)) bs) bs)
+  (*ref*) (vtab (fn i => atab (fn j => randBool (i*bs + j)) bs) bs)
 val rg' =
-  ref (Seq.tabulate (fn i => Seq.tabulate (fn j => randBool (bs*bs + i*bs + j)) bs) bs)
+  (*ref*) (vtab (fn i => atab (fn j => randBool (bs*bs + i*bs + j)) bs) bs)
 
 (* ocaml source:
  *
@@ -65,7 +71,7 @@ val rg' =
  *)
 
 fun get g x y =
-  Seq.nth (Seq.nth g x) y
+  anth (vnth g x) y
   handle _ => 0
 
 (* fun neighbourhood g x y =
@@ -81,11 +87,11 @@ fun get g x y =
 fun neighbourhood g x y =
   let
     fun get_element s y =
-      Seq.nth s y
+      anth s y
       handle _ => 0
     fun sum_row(x, y) =
       let
-        val gx = Seq.nth g x
+        val gx = vnth g x
       in
         (get_element gx (y-1)) + (get_element gx y) + (get_element gx (y+1))
       end
@@ -107,7 +113,7 @@ fun next_cell g x y =
     *)
 
     (* I could enable MLton or-patterns, but whatever *)
-    case (Seq.nth (Seq.nth g x) y, n) of
+    case (anth (vnth g x) y, n) of
       (1, 0)                       => 0  (* lonely *)
     | (1, 1)                       => 0  (* lonely *)
     | (1, 4)                       => 0  (* overcrowded *)
@@ -168,10 +174,10 @@ fun next_cell g x y =
 ##     T.teardown_pool pool
  *)
 
-fun next () =
+fun next (g, new_g) =
   let
-    val g = !rg
-    val new_g = !rg'
+    (* val g = !rg
+    val new_g = !rg' *)
 
     (* SAM_NOTE: this is my own granularity control. The ocaml source does
      * static partitioning based on num_domains, but this is unnecessary.
@@ -182,19 +188,18 @@ fun next () =
   in
     ForkJoin.parfor chunk_size (0, board_size) (fn x =>
       Util.for (0, board_size) (fn y =>
-        ArraySlice.update (Seq.nth new_g x, y, next_cell g x y)));
+        Array.update (vnth new_g x, y, next_cell g x y)));
 
-    rg := new_g;
-    rg' := g
+    (new_g, g)
   end
 
-fun repeat n =
+fun repeat state n =
   case n of
-    0 => ()
-  | _ => (next (); repeat (n-1))
+    0 => state
+  | _ => repeat (next state) (n-1)
 
 val msg = "doing " ^ Int.toString n_times ^ " iterations"
-val _ = Benchmark.run msg (fn _ => repeat n_times)
+val (result, _) = Benchmark.run msg (fn _ => repeat (rg, rg') n_times)
 
 (* ===========================================================================
  * SAM_NOTE: rest is my stuff. Just outputting the result.
@@ -206,7 +211,8 @@ val _ =
     print ("use -output XXX to see result\n")
   else
     let
-      val g = !rg
+      (* val g = !rg *)
+      val g = result
 
       fun color 0 = Color.white
         | color _ = Color.black
