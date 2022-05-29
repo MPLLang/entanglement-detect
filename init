@@ -14,3 +14,8 @@ if [[ ! -f $ROOT/inputs/words256.txt ]]; then
 else
   echo "[INFO] inputs okay"
 fi
+
+mkdir -p figures
+mkdir -p results
+mkdir -p small/figures
+mkdir -p small/results
