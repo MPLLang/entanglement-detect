@@ -1,0 +1,43 @@
+#!/bin/bash
+
+ROOT=$(git rev-parse --show-toplevel)
+
+if [[ ! -f $ROOT/inputs/words256.txt ]]; then
+  echo "[INFO] Generating 'words256.txt'...";
+  ff=$ROOT/inputs/words64.txt;
+  cat $ff $ff $ff $ff > $ROOT/inputs/words256.txt;
+fi
+
+echo "[INFO] Generating graphs..."
+TMP=$(mktemp -d)
+( \
+  cd $TMP \
+  && git clone https://github.com/cmuparlay/pbbsbench \
+  && cd pbbsbench \
+  && git submodule update --init --recursive \
+  && cd testData/graphData \
+  && make -j rMatGraph edgeArrayToAdj \
+  && echo "[INFO] rMatGraph 10000000 rmat-10M-edgearray" \
+  && ./rMatGraph 10000000 rmat-10M-edgearray \
+  && echo "[INFO] edgeArrayToAdj -o $ROOT/inputs/rmat-10M-symm rmat-10M-edgearray" \
+  && ./edgeArrayToAdj -o $ROOT/inputs/rmat-10M-symm rmat-10M-edgearray \
+  && rm -f rmat-10M-edgearray \
+  && cd $ROOT \
+  && make -C mpl graphio.mlton.bin \
+  && echo "[INFO] mpl/bin/graphio.mlton.bin inputs/rmat-10M-symm -outfile inputs/rmat-10M-symm-bin" \
+  && mpl/bin/graphio.mlton.bin $ROOT/inputs/rmat-10M-symm -outfile $ROOT/inputs/rmat-10M-symm-bin \
+  && rm -f $ROOT/inputs/rmat-10M-symm \
+  && echo "[INFO] rMatGraph 1000000 rmat-10M-edgearray" \
+  && ./rMatGraph 1000000 rmat-1M-edgearray \
+  && echo "[INFO] edgeArrayToAdj -o $ROOT/inputs/rmat-1M-symm rmat-1M-edgearray" \
+  && ./edgeArrayToAdj -o $ROOT/inputs/rmat-1M-symm rmat-1M-edgearray \
+  && rm -f rmat-1M-edgearray \
+  && cd $ROOT \
+  && make -C mpl graphio.mlton.bin \
+  && echo "[INFO] mpl/bin/graphio.mlton.bin inputs/rmat-1M-symm -outfile inputs/rmat-1M-symm-bin" \
+  && mpl/bin/graphio.mlton.bin $ROOT/inputs/rmat-1M-symm -outfile $ROOT/inputs/rmat-1M-symm-bin \
+  && rm -f $ROOT/inputs/rmat-1M-symm
+)
+
+rm -rf $TMP
+
