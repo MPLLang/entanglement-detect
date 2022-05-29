@@ -7,7 +7,7 @@ FROM ubuntu:16.04
 # install mpl-switch
 # download repo and initialize, install mpl
 RUN apt-get update -qq \
- && apt-get install -qq git build-essential libgmp-dev mlton mlton-tools vim time numactl curl \
+ && apt-get install -qq git build-essential libgmp-dev mlton mlton-tools vim time numactl curl jq \
  && apt-get install -qq python2.7 \
  && update-alternatives --install /usr/bin/python python /usr/bin/python2.7 1 \
  && update-alternatives --config python \

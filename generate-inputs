@@ -27,7 +27,8 @@ TMP=$(mktemp -d)
   && echo "[INFO] mpl/bin/graphio.mlton.bin inputs/rmat-10M-symm -outfile inputs/rmat-10M-symm-bin" \
   && mpl/bin/graphio.mlton.bin $ROOT/inputs/rmat-10M-symm -outfile $ROOT/inputs/rmat-10M-symm-bin \
   && rm -f $ROOT/inputs/rmat-10M-symm \
-  && echo "[INFO] rMatGraph 1000000 rmat-10M-edgearray" \
+  && cd $TMP/pbbsbench/testData/graphData \
+  && echo "[INFO] rMatGraph 1000000 rmat-1M-edgearray" \
   && ./rMatGraph 1000000 rmat-1M-edgearray \
   && echo "[INFO] edgeArrayToAdj -o $ROOT/inputs/rmat-1M-symm rmat-1M-edgearray" \
   && ./edgeArrayToAdj -o $ROOT/inputs/rmat-1M-symm rmat-1M-edgearray \
