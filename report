@@ -355,7 +355,7 @@ def fmtImp(xx):
     return "--"
   elif type(xx) is str:
     return xx
-  elif xx >= 1.10:
+  elif xx > 1.0:
     return makeBold(ov(xx) + "x")
   else:
     return ov(xx) + "x"
@@ -729,6 +729,10 @@ with open(suspectsCmp, 'w') as output:
     susChecks1 = averageEChecks(D, 'mpl-detect', tag, 1)
     allChecks1 = averageEChecks(D, 'mpl-detect-no-suspects', tag, 1)
 
+    if allChecks1 < 1000:
+      imps1.append(ovv(sd(nosus1, sus1)))
+      impsP.append(ovv(sd(nosusp, susp)))
+
     # try:
     #   ratNotSuspicious = 1.0 - (susChecks1 / allChecks1)
     #   pctNotSuspicious = str(int(round(100 * ratNotSuspicious))) + "\%"
@@ -743,19 +747,22 @@ with open(suspectsCmp, 'w') as output:
       , fmtCount(marks1)
       ]
 
-    imps1.append(ovv(sd(nosus1, sus1)))
-    impsP.append(ovv(sd(nosusp, susp)))
+    # imps1.append(ovv(sd(nosus1, sus1)))
+    # impsP.append(ovv(sd(nosusp, susp)))
 
     row = [ fmt(x) for x in row ]
     output.write(" & ".join([displayTag(tag)] + row))
     output.write("  \\\\\n")
-  output.write("\\midrule\n")
+  # output.write("\\midrule\n")
 print("[INFO] wrote to {}".format(suspectsCmp))
 
-with open("figures/suspects-comparison-geomeans.tex", 'w') as output:
-  row = ["geomean", fmtImp(geomean(imps1)), fmtImp(geomean(impsP))]
-  output.write(" & ".join(row))
-  output.write("\\\\\n")
+print("geomean perf improvement, non-candidate benchmarks, P=1: {}".format(fmtImp(geomean(imps1))))
+print("geomean perf improvement, non-candidate benchmarks, P={}: {}".format(maxp, fmtImp(geomean(impsP))))
+
+# with open("figures/suspects-comparison-geomeans.tex", 'w') as output:
+#   row = ["geomean", fmtImp(geomean(imps1)), fmtImp(geomean(impsP))]
+#   output.write(" & ".join(row))
+#   output.write("\\\\\n")
 
 # ============================================================================
 
