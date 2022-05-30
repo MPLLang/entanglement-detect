@@ -1,0 +1,130 @@
+{
+  "templates":
+    [
+      {
+        "match": { "config": "mpl", "exp": "time" },
+        "template": "/usr/bin/time -v bin/<bench>.<config>.bin @mpl <procs?procs {}> set-affinity -- <args?{} ><args1?{}> -repeat 20 -warmup 5"
+      },
+      {
+        "match": { "config": "mpl", "exp": "space" },
+        "template": "/usr/bin/time -v bin/<bench>.<config>.bin @mpl <procs?procs {}> set-affinity -- <args?{} ><args1?{}> -repeat 20 -warmup 0"
+      },
+      {
+        "match": { "config": "mpl", "exp": "stats" },
+        "template": "bin/<bench>.<config>.bin @mpl <procs?procs {}> set-affinity -- <args?{} ><args1?{}> -repeat 1 -warmup 0"
+      },
+      {
+        "match": { "config": "mlton", "exp": "time" },
+        "template": "/usr/bin/time -v bin/<bench>.<config>.bin <args?{} ><args1?{}> -repeat 20 -warmup 5"
+      },
+      {
+        "match": { "config": "mlton", "exp": "space" },
+        "template": "/usr/bin/time -v bin/<bench>.<config>.bin <args?{} ><args1?{}> -repeat 20 -warmup 0"
+      }
+    ],
+
+  "globals":
+    {
+      "config": ["mlton", "mpl", "mpl-detect", "mpl-detect-no-suspects"],
+      "cwd": ["mpl"],
+      "exp": ["time", "space", "stats"],
+      "trials": ["1", "10"]
+    },
+
+  "jqselect":
+    "(  (.exp == \"stats\" and .trials == \"1\" and .procs == \"1\" and (.config == \"mpl-detect\" or .config == \"mpl-detect-no-suspects\"))  or (.exp == \"time\" and .trials == \"1\") or (.exp == \"space\" and .procs == \"1\" and .trials == \"1\") or (.exp == \"space\" and .procs == $max_procs and .trials == \"10\"))        and         ((.config == \"mlton\" and .procs == \"1\") or (.config == \"mpl\" and (.procs == \"1\" or .procs == $max_procs)) or (.config == \"mpl-detect-no-suspects\" and (.procs == \"1\" or .procs == $max_procs)) or (.config == \"mpl-detect\"))",
+
+  "specs":
+    [
+      {
+        "tag": ["primes"],
+        "bench": ["primes"],
+        "args": ["-N 10000000"]
+      },
+      {
+        "tag": ["dmm"],
+        "bench": ["dmm"],
+        "args": ["-N 512"]
+      },
+      {
+        "tag": ["skyline"],
+        "bench": ["skyline"],
+        "args": ["-size 100000"]
+      },
+      {
+        "tag": ["raytracer"],
+        "bench": ["ray"],
+        "args": ["-n 500 -m 500"]
+      },
+      {
+        "tag": ["tinykaboom"],
+        "bench": ["tinykaboom"],
+        "args": ["-width 100 -height 100 -frames 1 -fps 1"]
+      },
+      {
+        "tag": ["game-of-life"],
+        "bench": ["ocaml-game-of-life"],
+        "args": ["-n_times 100 -board_size 512"]
+      },
+      {
+        "tag": ["msort-strings"],
+        "bench": ["msort-strings"],
+        "args": ["../inputs/words8.txt"]
+      },
+      {
+        "tag": ["nearest-nbrs"],
+        "bench": ["nn"],
+        "args": ["-N 100000"]
+      },
+      {
+        "tag": ["quickhull"],
+        "bench": ["quickhull"],
+        "args": ["-N 2000000"]
+      },
+      {
+        "tag": ["seam-carve"],
+        "bench": ["seam-carve"],
+        "args": ["../inputs/pano.ppm -num-seams 10"]
+      },
+      {
+        "tag": ["dedup"],
+        "bench": ["dedup"],
+        "args": ["../inputs/words64.txt --verbose --no-output"]
+      },
+      {
+        "tag": ["suffix-array"],
+        "bench": ["suffix-array"],
+        "args": ["--benchmark -N 1000000"]
+      },
+      {
+        "tag": ["grep"],
+        "bench": ["grep"],
+        "args": ["EE ../inputs/words64.txt --benchmark"]
+      },
+      {
+        "tag": ["palindrome"],
+        "bench": ["palindrome"],
+        "args": ["-N 100000"]
+      },
+      {
+        "tag": ["tokens"],
+        "bench": ["tokens"],
+        "args": ["../inputs/words64.txt --verbose --no-output"]
+      },
+      {
+        "tag": ["nqueens"],
+        "bench": ["nqueens"],
+        "args": ["-N 13"]
+      },
+      {
+        "tag": ["range-query"],
+        "bench": ["range-tree"],
+        "args": ["-n 100000 -q 100000"]
+      },
+      {
+        "tag": ["delaunay-triangulate"],
+        "bench": ["delaunay"],
+        "args": ["-n 100000"]
+      }
+    ]
+}
