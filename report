@@ -360,6 +360,14 @@ def fmtImp(xx):
   else:
     return ov(xx) + "x"
 
+def fmtImpTermOutput(xx):
+  if xx is None:
+    return "--"
+  elif type(xx) is str:
+    return xx
+  else:
+    return ov(xx) + "x"
+
 def fmtCount(xx):
   if xx is None:
     return "--"
@@ -519,6 +527,7 @@ print "geomean 1-core time overhead", geomean([seqOverhead(t) for t in orderedTa
 print "geomean 72-core time overhead", geomean([parOverhead(t) for t in orderedTags])
 print "geomean 1-core space overhead", geomean([seqSpaceOverhead(t) for t in orderedTags])
 print "geomean 72-core space overhead", geomean([parSpaceOverhead(t) for t in orderedTags])
+print "\n"
 
 # ===========================================================================
 
@@ -540,6 +549,15 @@ def color_pcd(b, a):
   except:
     return None
 
+# percent difference (b-a)/|a|
+def pcd(b, a):
+  try:
+    xx = 100.0 * (b-a) / abs(a)
+    result = ("+" if xx >= 0.0 else "") + ("{:.1f}%".format(xx))
+    return result
+  except:
+    return None
+
 def sp(kb):
   if kb is None:
     return None
@@ -551,100 +569,117 @@ def sp(kb):
   return "%3.1f %s" % (num, 'T')
 
 def defaultAlign(i):
-  return "r" if i == 0 else "l"
+  return "r" if i == 0 else "c"
 
 
-headers1 = ['', '   P=1', None, None, '   P={}'.format(maxp), None, None]
-headers2 = ['Benchmark', 'MPL', 'D', 'DNS', 'MPL', 'D', 'DNS']
-tt = [headers1, "-", headers2, "="]
-for tag in orderedTags:
-  thisRow = [displayTag(tag),
-             tm(averageTime(D, 'mpl', tag, 1)),
-             tm(averageTime(D, 'mpl-detect', tag, 1)),
-             tm(averageTime(D, 'mpl-detect-no-suspects', tag, 1)),
-             tm(averageTime(D, 'mpl', tag, maxp)),
-             tm(averageTime(D, 'mpl-detect', tag, maxp)),
-             tm(averageTime(D, 'mpl-detect-no-suspects', tag, maxp)),
-            ]
-  thisRow = [thisRow[0]] + [str(x) if x is not None else "--" for x in thisRow[1:]]
-  tt.append(thisRow)
-
-print("TIMINGS")
-print(table(tt, defaultAlign))
-print("")
+# ===========================================================================
+# ===========================================================================
+# ===========================================================================
 
 
-headers1 = ['', '   P=1', None, '   P={}'.format(maxp), None]
-headers2 = ['Benchmark', 'MPL', 'D', 'MPL', 'D']
-tt = [headers1, "-", headers2, "="]
-for tag in orderedTags:
-  thisRow = [displayTag(tag),
-             sp(averageSpace(D, 'mpl', tag, 1)),
-             sp(averageSpace(D, 'mpl-detect', tag, 1)),
-             sp(averageSpace(D, 'mpl', tag, maxp)),
-             sp(averageSpace(D, 'mpl-detect', tag, maxp))
-            ]
-  thisRow = [thisRow[0]] + [str(x) if x is not None else "--" for x in thisRow[1:]]
-  tt.append(thisRow)
-
-print("MAX RESIDENCY")
-print(table(tt, defaultAlign))
-print("")
-
-
-headers1 = ['', '  TIME', None, '  SPACE', None]
-headers2 = ['Benchmark', ' P=1', ' P={}'.format(maxp), ' P=1', ' P={}'.format(maxp)]
-tt = [headers1, "-", headers2, "="]
+headers1 = ['', 'T(1)', None, 'T({})'.format(maxp), None, 'R(1)', None, 'R({})'.format(maxp), None]
+headers11 = ['', '---------------', None, '---------------', None, '---------------', None, '---------------', None]
+headers2 = ['Benchmark', 'MPL', 'Ours', 'MPL', 'Ours', 'MPL', 'Ours', 'MPL', 'Ours']
+tt = [headers1, headers11, headers2, "="]
 for tag in orderedTags:
   tMPL1 = tm(averageTime(D, 'mpl', tag, 1))
   tMPLp = tm(averageTime(D, 'mpl', tag, maxp))
   tMPLcc1 = tm(averageTime(D, 'mpl-detect', tag, 1))
   tMPLccp = tm(averageTime(D, 'mpl-detect', tag, maxp))
-  rMPL1 = averageSpace(D, 'mpl', tag, 1)
-  rMPLp = averageSpace(D, 'mpl', tag, maxp)
-  rMPLcc1 = averageSpace(D, 'mpl-detect', tag, 1)
-  rMPLccp = averageSpace(D, 'mpl-detect', tag, maxp)
+  rMPL1 = spg(averageSpace(D, 'mpl', tag, 1))
+  rMPLp = spg(averageSpace(D, 'mpl', tag, maxp))
+  rMPLcc1 = spg(averageSpace(D, 'mpl-detect', tag, 1))
+  rMPLccp = spg(averageSpace(D, 'mpl-detect', tag, maxp))
 
-  t1 = color_pcd(tMPLcc1, tMPL1)
-  tp = color_pcd(tMPLccp, tMPLp)
-  r1 = color_pcd(rMPLcc1, rMPL1)
-  rp = color_pcd(rMPLccp, rMPLp)
+  t1 = pcd(tMPLcc1, tMPL1)
+  tp = pcd(tMPLccp, tMPLp)
+  r1 = pcd(rMPLcc1, rMPL1)
+  rp = pcd(rMPLccp, rMPLp)
 
-  row = [displayTag(tag), t1, tp, r1, rp]
+  row = [
+    displayTag(tag),
+    fmt(tMPL1),
+    "{} ({})".format(fmt(tMPLcc1), t1 if t1 is not None else "--"),
+    fmt(tMPLp),
+    "{} ({})".format(fmt(tMPLccp), tp if tp is not None else "--"),
+    sfmt(rMPL1),
+    "{} ({})".format(sfmt(rMPLcc1), r1 if r1 is not None else "--"),
+    sfmt(rMPLp),
+    "{} ({})".format(sfmt(rMPLccp), rp if rp is not None else "--")
+  ]
   row = [x if x is not None else "--" for x in row]
   tt.append(row)
 
-print("MPL-DETECT versus MPL")
+tt.append('=')
+
 print(table(tt, defaultAlign))
-print("")
+print("""\
+  FULL EXPERIMENTS: MPL comparison. See Figure 8 in paper.""")
+print("\n")
 
 
-
-headers1 = ['', '  TIME', None, '  SPACE', None]
-headers2 = ['Benchmark', ' P=1', ' P={}'.format(maxp), ' P=1', ' P={}'.format(maxp)]
-tt = [headers1, "-", headers2, "="]
+# h1 = []
+h2 = ["", "Base", "", "OV", "", "SU"]
+h22 = ["", "----", "", "--------", "", "--------"]
+h3 = ["", "T(s)", "T(1)", "T(1)/T(s)", "T({})".format(maxp), "T(s)/T({})".format(maxp)]
+tt = [h2, h22, h3,"="]
 for tag in orderedTags:
-  tMPL1 = tm(averageTime(D, 'mpl-detect-no-suspects', tag, 1))
-  tMPLp = tm(averageTime(D, 'mpl-detect-no-suspects', tag, maxp))
-  tMPLcc1 = tm(averageTime(D, 'mpl-detect', tag, 1))
-  tMPLccp = tm(averageTime(D, 'mpl-detect', tag, maxp))
-  rMPL1 = averageSpace(D, 'mpl-detect-no-suspects', tag, 1)
-  rMPLp = averageSpace(D, 'mpl-detect-no-suspects', tag, maxp)
-  rMPLcc1 = averageSpace(D, 'mpl-detect', tag, 1)
-  rMPLccp = averageSpace(D, 'mpl-detect', tag, maxp)
+  mlton = tm(averageTime(D, 'mlton', tag, 1))
+  mplcc1 = tm(averageTime(D, 'mpl-detect', tag, 1))
+  mplccp = tm(averageTime(D, 'mpl-detect', tag, maxp))
 
-  t1 = color_pcd(tMPL1, tMPLcc1)
-  tp = color_pcd(tMPLp, tMPLccp)
-  r1 = color_pcd(rMPL1, rMPLcc1)
-  rp = color_pcd(rMPLp, rMPLccp)
-
-  row = [displayTag(tag), t1, tp, r1, rp]
-  row = [x if x is not None else "--" for x in row]
+  row = \
+    [ mlton
+    , fmt(mplcc1)
+    , ov(sd(mplcc1, mlton))
+    , fmt(mplccp)
+    , su(sd(mlton, mplccp))
+    ]
+  row = [displayTag(tag)] + [fmt(x) for x in row]
   tt.append(row)
-
-print("MPL-DETECT-NO-SUSPECTS versus MPL-DETECT")
+tt.append("=")
 print(table(tt, defaultAlign))
-print("")
+print("""\
+  FULL EXPERIMENTS: Overheads and speedups, with
+  respect to sequential baseline. See Figure 10
+  in paper.""")
+print("\n")
+
+
+
+h1 =  ["", "Improvement Ratio", None, "Graph Queries", None, ""]
+h11 = ["", "-----------------", None, "-----------------", None, ""]
+h2 = ["", "P=1", "P={}".format(maxp), "Naive", "w/ Candidates", "# Candidate Marks"]
+tt = [h1, h11, h2, "="]
+for tag in orderedTags:
+  sus1 = tm(averageTime(D, 'mpl-detect', tag, 1))
+  susp = tm(averageTime(D, 'mpl-detect', tag, maxp))
+  nosus1 = tm(averageTime(D, 'mpl-detect-no-suspects', tag, 1))
+  nosusp = tm(averageTime(D, 'mpl-detect-no-suspects', tag, maxp))
+
+  marks1 = averageSusMarks(D, 'mpl-detect', tag, 1)
+  susChecks1 = averageEChecks(D, 'mpl-detect', tag, 1)
+  allChecks1 = averageEChecks(D, 'mpl-detect-no-suspects', tag, 1)
+
+  if allChecks1 < 1000:
+    continue
+
+  row = \
+    [ fmtImpTermOutput(sd(nosus1, sus1))
+    , fmtImpTermOutput(sd(nosusp, susp))
+    , fmtCount(allChecks1)
+    , fmtCount(susChecks1)
+    , fmtCount(marks1)
+    ]
+
+  row = [displayTag(tag)] + [ fmt(x) for x in row ]
+  tt.append(row)
+tt.append("=")
+print(table(tt, defaultAlign))
+print("""\
+  FULL EXPERIMENTS: Performance improvement due to
+  tracking candidates. See Figure 11 in paper.""")
+print("\n")
 
 # ===========================================================================
 # ===========================================================================
@@ -652,117 +687,6 @@ print("")
 
 if not os.path.isdir("figures"):
   os.mkdir("figures")
-
-# ============================================================================
-
-mplComparisonTable = "figures/mpl-space-time-comparison.tex"
-with open(mplComparisonTable, 'w') as output:
-  for tag in orderedTags:
-    R_mpl1 = spg(averageSpace(D, 'mpl', tag, 1))
-    R_mplp = spg(averageSpace(D, 'mpl', tag, maxp))
-    R_mplcc1 = spg(averageSpace(D, 'mpl-detect', tag, 1))
-    R_mplccp = spg(averageSpace(D, 'mpl-detect', tag, maxp))
-
-    T_mpl1 = tm(averageTime(D, 'mpl', tag, 1))
-    T_mplp = tm(averageTime(D, 'mpl', tag, maxp))
-    T_mplcc1 = tm(averageTime(D, 'mpl-detect', tag, 1))
-    T_mplccp = tm(averageTime(D, 'mpl-detect', tag, maxp))
-
-    row = \
-      [ fmt(T_mpl1)
-      , fmt(T_mplcc1) + " (" + latexpcd(T_mplcc1, T_mpl1, highlight=False) + ")"
-      , fmt(T_mplp)
-      , fmt(T_mplccp) + " (" + latexpcd(T_mplccp, T_mplp, highlight=False) + ")"
-      , sfmt(R_mpl1)
-      , sfmt(R_mplcc1) + " (" + latexpcd(R_mplcc1, R_mpl1, highlight=False) + ")"
-      , sfmt(R_mplp)
-      , sfmt(R_mplccp) + " (" + latexpcd(R_mplccp, R_mplp, highlight=False) + ")"
-      ]
-
-    output.write(" & ".join([displayTag(tag)] + row))
-    output.write("  \\\\\n")
-print("[INFO] wrote to {}".format(mplComparisonTable))
-
-# ============================================================================
-
-mltonTimeCmpTable = "figures/simple-mlton-time-comparison.tex"
-with open(mltonTimeCmpTable, 'w') as output:
-  for tag in orderedTags:
-    mlton = tm(averageTime(D, 'mlton', tag, 1))
-    mplcc1 = tm(averageTime(D, 'mpl-detect', tag, 1))
-    mplccp = tm(averageTime(D, 'mpl-detect', tag, maxp))
-
-    # try:
-    #   par, check, total = staged_pcd(mlton, mpl1, mplcc1)
-    # except:
-    #   par = "--"
-    #   check = "--"
-    #   total = "--"
-
-    row = \
-      [ mlton
-      , fmt(mplcc1)
-      , ov(sd(mplcc1, mlton))
-      , fmt(mplccp)
-      , su(sd(mlton, mplccp))
-      ]
-
-    row = [ fmt(x) for x in row ]
-    output.write(" & ".join([displayTag(tag)] + row))
-    output.write("  \\\\\n")
-print("[INFO] wrote to {}".format(mltonTimeCmpTable))
-
-# ============================================================================
-
-imps1 = []
-impsP = []
-
-suspectsCmp = "figures/suspects-comparison.tex"
-with open(suspectsCmp, 'w') as output:
-  for tag in orderedTags:
-    sus1 = tm(averageTime(D, 'mpl-detect', tag, 1))
-    susp = tm(averageTime(D, 'mpl-detect', tag, maxp))
-    nosus1 = tm(averageTime(D, 'mpl-detect-no-suspects', tag, 1))
-    nosusp = tm(averageTime(D, 'mpl-detect-no-suspects', tag, maxp))
-
-    marks1 = averageSusMarks(D, 'mpl-detect', tag, 1)
-    susChecks1 = averageEChecks(D, 'mpl-detect', tag, 1)
-    allChecks1 = averageEChecks(D, 'mpl-detect-no-suspects', tag, 1)
-
-    if allChecks1 < 1000:
-      imps1.append(ovv(sd(nosus1, sus1)))
-      impsP.append(ovv(sd(nosusp, susp)))
-
-    # try:
-    #   ratNotSuspicious = 1.0 - (susChecks1 / allChecks1)
-    #   pctNotSuspicious = str(int(round(100 * ratNotSuspicious))) + "\%"
-    # except:
-    #   pctNotSuspicious = "--"
-
-    row = \
-      [ fmtImp(sd(nosus1, sus1))
-      , fmtImp(sd(nosusp, susp))
-      , fmtCount(allChecks1)
-      , fmtCount(susChecks1)
-      , fmtCount(marks1)
-      ]
-
-    # imps1.append(ovv(sd(nosus1, sus1)))
-    # impsP.append(ovv(sd(nosusp, susp)))
-
-    row = [ fmt(x) for x in row ]
-    output.write(" & ".join([displayTag(tag)] + row))
-    output.write("  \\\\\n")
-  # output.write("\\midrule\n")
-print("[INFO] wrote to {}".format(suspectsCmp))
-
-print("geomean perf improvement, non-candidate benchmarks, P=1: {}".format(fmtImp(geomean(imps1))))
-print("geomean perf improvement, non-candidate benchmarks, P={}: {}".format(maxp, fmtImp(geomean(impsP))))
-
-# with open("figures/suspects-comparison-geomeans.tex", 'w') as output:
-#   row = ["geomean", fmtImp(geomean(imps1)), fmtImp(geomean(impsP))]
-#   output.write(" & ".join(row))
-#   output.write("\\\\\n")
 
 # ============================================================================
 
@@ -785,7 +709,7 @@ fontSize = 18
 legendFontSize = 14
 markerSize = 9
 
-maxdim = 74
+maxdim = maxp+2
 
 ideal = plt.plot([0,maxdim], [0,maxdim], marker="", color="grey", linewidth=0.75)
 lines = []
@@ -796,7 +720,7 @@ for (i, tag) in enumerate(speedupTags):
       try:
         return baseline / averageTime(D, 'mpl-detect', tag, p)
       except Exception as e:
-        sys.stderr.write('[WARN] error while plotting speedup for {} at P={}: {}\n'.format(tag, p, e))
+        # sys.stderr.write('[WARN] error while plotting speedup for {} at P={}: {}\n'.format(tag, p, e))
         return None
     speedups = map(su, procs)
     color = colors[i % len(colors)]
