@@ -457,7 +457,7 @@ def table(rows, align=None):
 # =========================================================================
 
 def mostRecentResultsFile(suffix=""):
-  files = os.listdir(os.path.join(ROOT, "results"))
+  files = os.listdir(os.path.join(ROOT, "small", "results"))
   pattern = r'\d{6}-\d{6}'
   if suffix != "":
     pattern = pattern + "-" + suffix + "$"
@@ -478,7 +478,7 @@ else:
     print("[ERR] could not find most recent results file\n " + \
           "  check that these are formatted as 'YYMMSS-hhmmss'")
     sys.exit(1)
-  timingsFile = os.path.join(ROOT, 'results', mostRecent)
+  timingsFile = os.path.join(ROOT, 'small', 'results', mostRecent)
 
 print("[INFO] reading {}\n".format(timingsFile))
 with open(timingsFile, 'r') as data:
@@ -614,7 +614,11 @@ tt.append('=')
 
 print(table(tt, defaultAlign))
 print("""\
-  FULL EXPERIMENTS: MPL comparison. See Figure 8 in paper.""")
+  SMALL EXPERIMENTS: MPL comparison. Comparable to Figure 8 in paper,
+  but with three differences: smaller problem sizes, fewer processors
+  on parallel runs, and only a subset of benchmarks. For the benchmarks
+  shown, the percent overheads should still be in the same ballpark as
+  in Figure 8 in the paper.""")
 print("\n")
 
 
@@ -640,9 +644,17 @@ for tag in orderedTags:
 tt.append("=")
 print(table(tt, defaultAlign))
 print("""\
-  FULL EXPERIMENTS: Overheads and speedups, with
-  respect to sequential baseline. See Figure 10
-  in paper.""")
+  SMALL EXPERIMENTS: Overheads and speedups, with
+  respect to sequential baseline. Comparable to
+  Figure 10 in paper, but with three differences:
+  smaller problem sizes, fewer processors on
+  parallel runs, and only a subset of benchmarks.
+  The overheads should still be in the same
+  ballpark as in Figure 10 in the paper. The
+  speedups will be much smaller, due to the
+  fewer number of processors used, but there
+  should still be significant speedup (e.g.
+  around 4-7x speedup on 8 processors)""")
 print("\n")
 
 
@@ -677,16 +689,24 @@ for tag in orderedTags:
 tt.append("=")
 print(table(tt, defaultAlign))
 print("""\
-  FULL EXPERIMENTS: Performance improvement due to
-  tracking candidates. See Figure 11 in paper.""")
+  SMALL EXPERIMENTS: Performance improvement due to
+  tracking candidates. Comparable to Figure 11 in paper
+  except with three differences: smaller problem sizes,
+  fewer processors on parallel runs, and only a subset
+  of benchmarks. The performance improvement ratios
+  should be in the same ballpark as Figure 11 in the
+  paper, or slightly reduced due to the smaller problem
+  sizes. The number of graph queries should be smaller
+  by approximately 10x, due to the smaller problem
+  sizes.""")
 print("\n")
 
 # ===========================================================================
 # ===========================================================================
 # ===========================================================================
 
-if not os.path.isdir("figures"):
-  os.mkdir("figures")
+if not os.path.isdir("small/figures"):
+  os.mkdir("small/figures")
 
 # ============================================================================
 
@@ -745,7 +765,7 @@ matplotlib.rcParams['ps.fonttype'] = 42
 # set legend position
 matplotlib.rcParams['legend.loc'] = 'upper left'
 
-ticks = [1] + range(10, maxdim, 10)
+ticks = [1] + range(2, maxdim, 2)
 
 plt.xlabel('Processors', fontsize=fontSize)
 plt.ylabel('Speedup', fontsize=fontSize)
@@ -766,7 +786,7 @@ plt.legend(
   ncol=3
 )
 
-outputName = 'figures/mpl-detect-speedups.pdf'
+outputName = 'small/figures/mpl-detect-speedups.pdf'
 plt.savefig(outputName, bbox_inches='tight')
 sys.stdout.write("[INFO] output written to {}\n".format(outputName))
 
