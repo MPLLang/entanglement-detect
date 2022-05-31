@@ -48,7 +48,7 @@ For evaluating the artifact, we provide two sets of instructions, one for a
 "small" evaluation, and the other for a "full" evaluation. The small evaluation
 considers a subset of benchmarks with reduced problem sizes, and takes about
 20-30 minutes to run. The full evaluation is intended for fully reproducing our
-results in the paper, and takes [TODO] hours to run (depending
+results in the paper, and takes between 5.5 and 10 hours to run (depending
 on how much is reproduced).
 
 Minimum hardware requirements:
@@ -112,13 +112,13 @@ stdout, and copied to ARTIFACT-RESULTS/small-output) and a speedup plot
   and smaller number of cores used.
 
 
-FULL EVALUATION ([TODO] hours)
+FULL EVALUATION (5.5-10 hours)
 ----------------------------------------
 
 Requires at least 100GB RAM and a large number of cores.
 (At least 32 cores is okay; 64 or more is preferable).
 
-Step 1: Generate inputs (~5 minutes).
+Step 1: Generate inputs (~2 minutes).
 
   # ./generate-inputs
 
@@ -138,9 +138,10 @@ For example, in the paper we used `--procs 1,10,20,30,40,50,60,72` on a
 machine with 72 physical cores. With 32 cores, we would recommend
 `--procs 1,10,20,32`. With 64 cores, we recommend `--procs 1,10,20,30,40,50,64`.
 
-For reference, on our machine, the command `./run --procs 1,72` takes XXX
+For reference, on our machine, the command `./run --procs 1,72` takes 5.5
 hours. This is the minimum required for reproducing Figures 8, 10, and 11 in
-the paper.
+the paper. Figure 9 requires longer (for more intermediate amounts of
+processors).
 
 Step 3: Check results. Similar to the small evaluation, the tables produced
 (ARTIFACT-RESULTS/full-output) are comparable to Figures 8, 10 and 11, and the
