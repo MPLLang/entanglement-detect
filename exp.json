@@ -109,12 +109,12 @@
       {
         "tag": ["bfs-tree"],
         "bench": ["bfs-tree-entangled-fixed"],
-        "args": ["../inputs/rmat-10M-symm-bin"]
+        "args": ["../inputs/rmat-10M-symm-bin -source 1"]
       },
       {
         "tag": ["centrality"],
         "bench": ["centrality"],
-        "args": ["../inputs/rmat-10M-symm-bin"]
+        "args": ["../inputs/rmat-10M-symm-bin -source 1"]
       },
       {
         "tag": ["palindrome"],
