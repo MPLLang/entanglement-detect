@@ -20,22 +20,6 @@ has negligible cost and can therefore remain deployed with little or no impact
 on efficiency, scalability, and space.
 
 ------------------------------------------------------------------------------
------------------------------------ CLAIMS -----------------------------------
-------------------------------------------------------------------------------
-
-The claims in the paper supported by this artifact include:
-  1. The overhead (in terms of both time and space) of entanglement detection
-  is close to zero. For time specifically, the overhead is approximately 1%
-  on average across the benchmarks, with a max of approximately 7%.
-  A majority of benchmarks have less than 2% time overhead.
-  2. Entanglement detection is highly scalable: in a comparison with a
-  sequential baseline, speedups scale well as the number of processors
-  increases.
-  3. The performance improvement due to the "entanglement candidates" algorithm
-  is significant, due to a large number of unnecessary entanglement checks that
-  are eliminated.
-
-------------------------------------------------------------------------------
 ---------------------------------- OVERVIEW ----------------------------------
 ------------------------------------------------------------------------------
 
@@ -47,9 +31,8 @@ described in detail in the "Reuse and Repurposing" section, below.
 For evaluating the artifact, we provide two sets of instructions, one for a
 "small" evaluation, and the other for a "full" evaluation. The small evaluation
 considers a subset of benchmarks with reduced problem sizes, and takes about
-20-30 minutes to run. The full evaluation is intended for fully reproducing our
-results in the paper, and takes between 6 and 10 hours to run (depending
-on how much is reproduced).
+30 minutes to run. The full evaluation is intended for fully reproducing our
+results in the paper, and takes approximately 10 hours to run.
 
 Minimum hardware requirements:
 - 6GB RAM, 8 cores for the SMALL evaluation.
@@ -81,17 +64,129 @@ shell inside the container, which has the prompt '#'.
   $ mkdir ARTIFACT-RESULTS
   $ sudo docker run -v $(pwd -P)/ARTIFACT-RESULTS:/ARTIFACT-RESULTS --rm -it shwestrick/icfp22-artifact /bin/bash
 
+You should see a prompt like this:
+
+  root@f3eefb4b5201:~/entanglement-detect#
+
+Note that inside the container, if you create or modify any file within
+the /ARTIFACT-RESULTS/ directory, these changes will automatically be visible
+outside the container in the ARTIFACT-RESULTS directory you made at the
+beginning of Step 2, above. When you exit the container, these are the
+only files that will persist.
+
+-----------------------------------------------------------------------------
+--------------------- QUICK TOUR: REUSE AND REPURPOSING ---------------------
+-----------------------------------------------------------------------------
+
+Here, we give a quick tour, to familiarize the reader with the structure of
+the artifact, and demonstrate that the artifact (benchmarks and experiment
+scripts) can easily be adapted for other uses if desired.
+
+Inside the artifact container, the initial working directory is a checkout of
+the https://github.com/MPLLang/entanglement-detect repository (branch
+`icfp22-artifact`), which contains all the benchmarks and scripts used in our
+experiments. The purpose of these experiments is to evaluate the entanglement
+detection techniques presented in the paper, which have been implemented in the
+MPL compiler for Parallel ML (https://github.com/MPLLang/mpl).
+
+Inside `entanglement-detect`, benchmarks are defined in the mpl/bench
+subdirectory. Each subfolder of mpl/bench defines one benchmark. The source
+code of many of the benchmarks uses functionality from a shared library, in
+mpl/lib.
+
+There are multiple compiler configurations used in this benchmark suite. Each
+is defined by a file in mpl/config. The three main configurations are as
+follows.
+  * The `mpl-detect` configuration is our new version of the MPL compiler,
+  developed for this project. This has entanglement detection enabled by
+  default.
+  * The `mpl` configuration uses the plain MPL compiler, without entanglement
+  detection.
+  * The `mlton` configuration compiles using the MLton compiler. MLton does not
+  support parallelism, and is used as the sequential baseline in our
+  experiments. When a benchmark is compiled with MLton, parallelism is elided,
+  and replaced with equivalent sequential constructs.
+
+The file mpl/Makefile has targets of the form `BENCHMARK.CONFIG.bin`, where
+BENCHMARK is the name of a benchmark (i.e. a subfolder within mpl/bench) and
+CONFIG is the name of a compiler configuration to use. When making a benchmark,
+the resulting binary is placed in the mpl/bin subdirectory.
+
+For example, within the `mpl` directory, the command
+`make delaunay.mpl-detect.bin` creates an executable
+`bin/delaunay.mpl-detect.bin`.
+
+After building an executable, it can be run with the following syntax,
+where <N> is the number of threads (processors) to use, <ARGS> are
+benchmark-specific arguments, <R> is the number of repetitions, and <W> is
+the length (in seconds) of the warmup period. Each benchmark program proceeds
+first with a warmup period (performed by executing the benchmark back-to-back
+until the period has expired), and then by running the benchmark back-to-back
+for the number of repetitions specified.
+
+  # bin/<BENCHMARK>.<CONFIG>.bin @mpl procs <N> -- <ARGS> -repeat <R> -warmup <W>
+
+Many of the benchmarks take arguments of the form `-N <SIZE>` to define a
+problem size. This makes it easy to test performance across a range of problem
+sizes. For example, here are sample commands for running the "nearest-neighbors"
+benchmark (named `nn`) on 10^6 points, with entanglement detection enabled, on
+both 1 and 8 processors, with 5 repetitions and 2 seconds of warmup.
+
+  # cd mpl
+  # make nn.mpl-detect.bin
+  # bin/nn.mpl-detect.bin @mpl procs 1 -- -N 1000000 -repeat 5 -warmup 2
+  # bin/nn.mpl-detect.bin @mpl procs 8 -- -N 1000000 -repeat 5 -warmup 2
+
+Note that not all benchmarks take exactly the same arguments. In the top-level
+folder, there is a JSON file, `exp.json`, which specifies benchmark-specific
+arguments and parameters used in our experiments. In the field "specs", there
+is an array of entries, one for each benchmark. Each of these entries has a
+field "args" which shows an example of arguments that can be passed for that
+benchmark.
+
+The `exp.json` file also defines other parameters used in the experiments.
+This file is passed to `scripts/gencmds` which produces "rows" of key-value
+pairs, where each row describes one experiment. Examples of keys include
+"config", "tag", etc. The config is the name of compiler configuration to
+use, the tag is a unique name for each benchmark, etc.
+
+The output of `scripts/gencmds` is then piped into `scripts/runcmds` to
+produce results. See the `run` script for more detail.
+
+Finally, the `report` script parses the results are produces tables and
+figures.
+
+------------------------------------------------------------------------------
+----------------------------- EVALUATION CLAIMS ------------------------------
+------------------------------------------------------------------------------
+
+The claims in the paper supported by this artifact include:
+  1. The overhead (in terms of both time and space) of entanglement detection
+  is close to zero. For time specifically, the overhead is approximately 1%
+  on average across the benchmarks, with a max of approximately 7%.
+  A majority of benchmarks have less than 2% time overhead.
+  2. Entanglement detection is highly scalable: in a comparison with a
+  sequential baseline, speedups scale well as the number of processors
+  increases.
+  3. The performance improvement due to the "entanglement candidates" algorithm
+  is significant, due to a large number of unnecessary entanglement checks that
+  are eliminated.
+
 ------------------------------------------------------------------------------
 -------------------------- STEP BY STEP EVAULATIONS --------------------------
 ------------------------------------------------------------------------------
 
-SMALL EVALUATION (20-30 minutes)
+SMALL EVALUATION (30 minutes)
 --------------------------------
 
 Requires at least 6GB RAM and 8 cores.
 
 Step 1: Run benchmarks. Run the following commands inside the container
-(the prompt inside the container is '#').
+(the prompt inside the container is '#'). The first command, `./run-small`,
+will take 20-30 minutes to run. It begins by compiling the benchmarks, and
+then runs each benchmark one-by-one, storing the results in a fresh file in
+the `small/results/` directory. There should be 572 benchmark runs which need
+to complete in this step.
 
   # ./run-small
   # ./report-small | tee /ARTIFACT-RESULTS/small-output
@@ -111,18 +206,36 @@ stdout, and copied to ARTIFACT-RESULTS/small-output) and a speedup plot
   paper. The speedups will not be as high due to the reduced problem sizes
   and smaller number of cores used.
 
+Step 3: To help interpret the results of the small evaluation, results from a
+reference run are stored in the artifact. You can generate reference tables and
+plots using the following commands:
 
-FULL EVALUATION (6-10 hours)
+  # ./report-small small/results/220530-170213-small-exp-test | tee /ARTIFACT-RESULTS/small-output-reference
+  # cp -r small/figures /ARTIFACT-RESULTS/small-figures-reference
+
+The outputs of these commands are two files. These results should be similar to
+the results you obtained in Step 2, modulo hardware differences
+  * ARTIFACT-RESULTS/small-output-reference
+  * ARTIFACT-RESULTS/small-figures-reference/mpl-detect-speedups.pdf
+
+
+
+FULL EVALUATION (10 hours)
 ----------------------------------------
 
 Requires at least 110GB RAM and a large number of cores.
 (At least 32 cores is okay; 64 or more is preferable).
 
-Step 1: Generate inputs (~2 minutes).
+Step 1: Generate inputs (3 minutes). This pulls code from a public GitHub
+repo which is then used to generate large inputs to various benchmarks. The
+cumulative size of the resulting files is approximately 2 GB.
 
   # ./generate-inputs
 
-Step 2: Full experiments. Run the following commands inside the container.
+Step 2: Full experiments. Run the following commands inside the container. The
+first command takes up to 10 hours, depending on what <PROCLIST> you use
+(see below). It proceeds similar to the previous small evaluation, but with
+more benchmarks and larger problem sizes.
 
   # ./run --procs <PROCLIST>
   # ./report | tee /ARTIFACT-RESULTS/full-output
@@ -140,8 +253,8 @@ machine with 72 physical cores. With 32 cores, we would recommend
 
 For reference, on our machine, the command `./run --procs 1,72` takes 6
 hours. This is the minimum required for reproducing Figures 8, 10, and 11 in
-the paper. Figure 9 requires longer (for more intermediate amounts of
-processors).
+the paper. Reproducing Figure 9 requires using a larger list of processor
+counts.
 
 Step 3: Check results. Similar to the small evaluation, the tables produced
 (ARTIFACT-RESULTS/full-output) are comparable to Figures 8, 10 and 11, and the
@@ -149,81 +262,3 @@ speedup plot (ARTIFACT-RESULTS/full-figures/mpl-detect-speedups.pdf) is
 comparable to Figure 9. If a large number of processors (e.g. >=64) were used,
 these results should be similar to those reported in the paper, modulo
 hardware differences and containerization overheads.
-
------------------------------------------------------------------------------
---------------------------- REUSE AND REPURPOSING ---------------------------
------------------------------------------------------------------------------
-
-All code is additionally available on GitHub:
-  * The MPL Compiler, including our updates for this paper, is available
-  at https://github.com/MPLLang/mpl
-  * The experiments for this paper are available at
-  https://github.com/MPLLang/entanglement-detect
-
-The source code (benchmarks and experiment scripts) used in the artifact can
-easily be adapted for other uses, as described below.
-
-The benchmarks are available in the `entanglement-detect` repository, in the
-mpl/bench subdirectory. Each subfolder of mpl/bench defines one benchmark.
-
-There are multiple compiler configurations used in this benchmark suite. Each
-is defined by a file in mpl/config. The three main configurations are as
-follows.
-  * The `mpl-detect` configuration is our new version of the MPL compiler,
-  developed for this project. This has entanglement detection enabled by
-  default.
-  * The `mpl` configuration uses the vanilla MPL compiler (no entanglement
-  detection).
-  * The `mlton` configuration compiles using the MLton compiler. This is
-  used as the sequential baseline in our experiments.
-
-The file mpl/Makefile has targets of the form `BENCHMARK.CONFIG.bin`, where
-BENCHMARK is the name of a benchmark (i.e. a subfolder within mpl/bench) and
-CONFIG is the name of a compiler configuration to use. When making a benchmark,
-the resulting binary is placed in the mpl/bin subdirectory.
-
-For example, within the `mpl` directory, the command
-`make delaunay.mpl-detect.bin` creates an executable
-`bin/delaunay.mpl-detect.bin`.
-
-After building an executable, it can be run with the following syntax,
-where <N> is the number of threads (processors) to use, <ARGS> are
-benchmark-specific arguments, <R> is the number of repetitions, and <W> is
-the length (in seconds) of the warmup period. Each benchmark program proceeds
-first with a warmup period (performed by executing the benchmark back-to-back
-until the period has expired), and then by running the benchmark back-to-back
-for the number of repetitions specified.
-
-  [entanglement-detect/mpl]$ bin/<BENCHMARK>.<CONFIG>.bin @mpl procs <N> -- <ARGS> -repeat <R> -warmup <W>
-
-Many of the benchmarks take arguments of the form `-N <SIZE>` to define a
-problem size. This makes it easy to test performance across a range of problem
-sizes. For example, here are the commands for running the "nearest-neighbors"
-benchmark (named `nn`), with entanglement detection enabled, on 16 processors,
-across a range of sizes, with 10 repetitions and 3 seconds of warmup.
-
-  $ cd mpl
-  $ make nn.mpl-detect.bin
-  $ bin/nn.mpl-detect.bin @mpl procs 16 -- -N 10000 -repeat 10 -warmup 3
-  $ bin/nn.mpl-detect.bin @mpl procs 16 -- -N 100000 -repeat 10 -warmup 3
-  $ bin/nn.mpl-detect.bin @mpl procs 16 -- -N 1000000 -repeat 10 -warmup 3
-
-However, note that not all benchmarks take exactly the same arguments. In the
-top-level folder, there is a JSON file, `exp.json`, which specifies
-benchmark-specific arguments and parameters used in our experiments. In the
-field "specs", there is an array of entries, one for each benchmark. Each of
-these entries has a field "args" which shows an example of arguments that
-can be passed for that benchmark.
-
-The `exp.json` file also defines other parameters used in the experiments.
-This file is passed to `scripts/gencmds` which produces "rows" of key-value
-pairs, where each row describes one experiment. Examples of keys include
-"config", "tag", etc. The config is the name of compiler configuration to
-use, the tag is a unique name for each benchmark, etc.
-
-The output of `scripts/gencmds` is then piped into `scripts/runcmds` to
-produce results. See the `run` script for more detail.
-
-Finally, the `report` script parses the results are produces tables and
-figures.
-
