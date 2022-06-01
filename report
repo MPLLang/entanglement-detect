@@ -732,6 +732,7 @@ with open(suspectsCmp, 'w') as output:
     if allChecks1 < 1000:
       imps1.append(ovv(sd(nosus1, sus1)))
       impsP.append(ovv(sd(nosusp, susp)))
+      continue
 
     # try:
     #   ratNotSuspicious = 1.0 - (susChecks1 / allChecks1)
