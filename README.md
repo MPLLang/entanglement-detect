@@ -59,7 +59,7 @@ $ bin/nn.mpl-detect.bin @mpl procs 8 -- -N 1000000 -repeat 5 -warmup 2
 
 At this point, you can follow the instructions inside `README-artifact.txt`
 to run experiments. There is one difference however: you should omit running
-mcommands that copy results into `/ARTIFACT-RESULTS`
+commands that copy results into `/ARTIFACT-RESULTS`
 (this is specific to the Docker container and is not needed when running locally).
 
 For example, you can run the full evaluation locally as follows. Instructions
