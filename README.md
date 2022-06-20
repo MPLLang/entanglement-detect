@@ -5,6 +5,9 @@ our entanglement detection experiments. The artifact can either be run locally
 or through Docker. We recommend using the Docker image if possible, to avoid
 any issues with missing dependencies or different software versions.
 
+Detailed instructions for the artifact are available in `README-artifact.txt`.
+Below, we describe how to set up the artifact, either locally or with Docker.
+
 ## Docker instructions
 
 To run the artifact, you first need to either build or acquire the Docker
