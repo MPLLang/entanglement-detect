@@ -41,10 +41,26 @@ $ cd entanglement-detect
 $ ./init
 ```
 
-At this point, you can follow the instructions inside `README-artifact.txt`,
-with one difference: you should omit running commands that copy results into
-`/ARTIFACT-RESULTS` (this is specific to the Docker container and is not needed
-when running locally).
+Everything should now be ready. Run the following to double check that
+everything is working. The first `bin/...` command runs a nearest-neighbors
+benchmark on 1 processor, and the second runs it on 8 processors.
+For the first command, you should see approximately 2 seconds of warmup
+followed by 5 repetitions of the benchmark, and finally a summary of some
+measurements. For the second command, the output should be similar, except
+faster, because it uses 8 processors instead of 1. (If your machine does not
+have 8 processors, then use fewer.)
+
+```
+$ cd mpl
+$ make nn.mpl-detect.bin
+$ bin/nn.mpl-detect.bin @mpl procs 1 -- -N 1000000 -repeat 5 -warmup 2
+$ bin/nn.mpl-detect.bin @mpl procs 8 -- -N 1000000 -repeat 5 -warmup 2
+```
+
+At this point, you can follow the instructions inside `README-artifact.txt`
+to run experiments. There is one difference however: you should omit running
+mcommands that copy results into `/ARTIFACT-RESULTS`
+(this is specific to the Docker container and is not needed when running locally).
 
 For example, you can run the full evaluation locally as follows. Instructions
 for `<PROCLIST>` are in the "Full Evaluation" section of `README-artifact.txt`.
