@@ -109,7 +109,7 @@ if __name__ == "__main__":
       compilerPath
     )
     if not os.path.exists(compilerPath):
-      eprint("cannot find {}\n  maybe you need to run scripts/init.py?".format(compilerPath))
+      eprint("cannot find {}\n  maybe you need to run scripts/install_mpls?".format(compilerPath))
       die()
 
   cmd = \
