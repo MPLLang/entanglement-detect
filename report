@@ -710,6 +710,12 @@ def avg(xs):
   ys = [x for x in xs if x is not None]
   return sum(ys) / len(ys)
 
+def fmtov(x):
+  try:
+    return str(round(x, 2)) + "x"
+  except:
+    return "--"
+
 mplComparisonTable = "figures/mpl-space-time-comparison-with-avg.tex"
 with open(mplComparisonTable, 'w') as output:
   for tag in orderedTags:
@@ -759,12 +765,12 @@ with open(mplComparisonTable, 'w') as output:
 
   output.write("\\midrule\n")
   geoRow = \
-    [ "", ov(geomean(t1rat))
-    , "", ov(geomean(tprat))
-    , "", ov(geomean(r1rat))
-    , "", ov(geomean(rprat))
+    [ "", fmtov(geomean(t1rat))
+    , "", fmtov(geomean(tprat))
+    , "", fmtov(geomean(r1rat))
+    , "", fmtov(geomean(rprat))
     ]
-  output.write(" & ".join([r"geomean (\mpl{}/\mpldd{})"] + geoRow))
+  output.write(" & ".join(["geomean"] + geoRow))
   output.write("  \\\\\n")
 print("[INFO] wrote to {}".format(mplComparisonTable))
 
