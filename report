@@ -329,6 +329,17 @@ def latexpcd(b, a, highlight=True):
     sys.stderr.write("[WARN] " + str(e) + "\n")
     return "--"
 
+def fmtpcd(xx, highlight=True):
+  try:
+    result = ("+" if xx >= 0.0 else "") + ("{}\\%".format(xx))
+    if highlight and (xx < 0):
+      return makeBold(result)
+    else:
+      return result
+  except Exception as e:
+    sys.stderr.write("[WARN] " + str(e) + "\n")
+    return "--"
+
 def fmt(xx):
   if xx is None:
     return "--"
@@ -681,6 +692,80 @@ with open(mplComparisonTable, 'w') as output:
 
     output.write(" & ".join([displayTag(tag)] + row))
     output.write("  \\\\\n")
+print("[INFO] wrote to {}".format(mplComparisonTable))
+
+# ============================================================================
+
+pcdt1 = []
+pcdtp = []
+pcdr1 = []
+pcdrp = []
+
+t1rat = []
+tprat = []
+r1rat = []
+rprat = []
+
+def avg(xs):
+  ys = [x for x in xs if x is not None]
+  return sum(ys) / len(ys)
+
+mplComparisonTable = "figures/mpl-space-time-comparison-with-avg.tex"
+with open(mplComparisonTable, 'w') as output:
+  for tag in orderedTags:
+    R_mpl1 = spg(averageSpace(D, 'mpl', tag, 1))
+    R_mplp = spg(averageSpace(D, 'mpl', tag, maxp))
+    R_mplcc1 = spg(averageSpace(D, 'mpl-detect', tag, 1))
+    R_mplccp = spg(averageSpace(D, 'mpl-detect', tag, maxp))
+
+    T_mpl1 = tm(averageTime(D, 'mpl', tag, 1))
+    T_mplp = tm(averageTime(D, 'mpl', tag, maxp))
+    T_mplcc1 = tm(averageTime(D, 'mpl-detect', tag, 1))
+    T_mplccp = tm(averageTime(D, 'mpl-detect', tag, maxp))
+
+    pcdt1.append(pcd(T_mplcc1, T_mpl1))
+    pcdtp.append(pcd(T_mplccp, T_mplp))
+    pcdr1.append(pcd(R_mplcc1, R_mpl1))
+    pcdrp.append(pcd(R_mplccp, R_mplp))
+
+    t1rat.append(sd(T_mplcc1, T_mpl1))
+    tprat.append(sd(T_mplccp, T_mplp))
+    r1rat.append(sd(R_mplcc1, R_mpl1))
+    rprat.append(sd(R_mplccp, R_mplp))
+
+    row = \
+      [ fmt(T_mpl1)
+      , fmt(T_mplcc1) + " (" + latexpcd(T_mplcc1, T_mpl1, highlight=False) + ")"
+      , fmt(T_mplp)
+      , fmt(T_mplccp) + " (" + latexpcd(T_mplccp, T_mplp, highlight=False) + ")"
+      , sfmt(R_mpl1)
+      , sfmt(R_mplcc1) + " (" + latexpcd(R_mplcc1, R_mpl1, highlight=False) + ")"
+      , sfmt(R_mplp)
+      , sfmt(R_mplccp) + " (" + latexpcd(R_mplccp, R_mplp, highlight=False) + ")"
+      ]
+
+    output.write(" & ".join([displayTag(tag)] + row))
+    output.write("  \\\\\n")
+
+  # output.write("\\midrule\n")
+  # avgRow = \
+  #   [ "", fmtpcd(avg(pcdt1), highlight=False)
+  #   , "", fmtpcd(avg(pcdtp), highlight=False)
+  #   , "", fmtpcd(avg(pcdr1), highlight=False)
+  #   , "", fmtpcd(avg(pcdrp), highlight=False)
+  #   ]
+  # output.write(" & ".join([r"average (%diff)"] + avgRow))
+  # output.write("  \\\\\n")
+
+  output.write("\\midrule\n")
+  geoRow = \
+    [ "", ov(geomean(t1rat))
+    , "", ov(geomean(tprat))
+    , "", ov(geomean(r1rat))
+    , "", ov(geomean(rprat))
+    ]
+  output.write(" & ".join([r"geomean (\mpl{}/\mpldd{})"] + geoRow))
+  output.write("  \\\\\n")
 print("[INFO] wrote to {}".format(mplComparisonTable))
 
 # ============================================================================
